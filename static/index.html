@@ -64,7 +64,7 @@
     .topbar h1 { margin: 0; font-size: 19px; }
     .sync { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
     .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-    .content { padding: 24px 28px 44px; max-width: 1320px; margin: 0 auto; }
+    .content { padding: 24px 28px 44px; max-width: none; }
     .page { display: none; }
     .page.active { display: block; animation: enter .2s ease; }
     @keyframes enter { from { opacity: 0; transform: translateY(4px); } }
@@ -81,7 +81,7 @@
     .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,60,.1); }
     .btn.primary { border-color: var(--blue); color: white; background: var(--blue); }
     .btn.danger { color: var(--red); }
-    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 17px; margin-bottom: 22px; }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17px; margin-bottom: 22px; }
     .card {
       border: 1px solid var(--line); border-radius: var(--radius);
       padding: 20px; background: var(--surface); box-shadow: var(--shadow);
@@ -103,7 +103,7 @@
     .panel-head h3 { margin: 0; font-size: 15px; }
     .panel-body { padding: 20px; }
     .toolbar {
-      display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
       padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: white;
     }
     .search {
@@ -114,9 +114,20 @@
       border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
       color: var(--ink); background: #fff;
     }
+    .filter-field { min-width: 200px; max-width: 260px; }
+    #contract-filter-value, #payment-filter-value { display: flex; min-width: 180px; flex: 1; }
+    #contract-filter-value .filter, #payment-filter-value .filter { width: 100%; }
+    .tree-table { min-width: 1680px; font-size: 12px; }
+    .tree-table tr.row-contract { background: #f7f9fc; font-weight: 650; }
+    .tree-table tr.row-free { background: #fff8ec; }
+    .tree-table tr.row-spec td:first-child { padding-left: 28px; }
+    .tree-table tr.row-pay td:first-child { padding-left: 48px; }
+    .tree-table tr.row-total { background: #eef3ea; font-weight: 700; }
+    .tree-table tr.row-balance { background: #eef2fb; font-weight: 700; }
+    .panel + .panel { margin-top: 18px; }
     .table-wrap { overflow: auto; width: 100%; }
     table { width: 100%; border-collapse: collapse; }
-    .data-table { min-width: 1120px; table-layout: fixed; }
+    .data-table { min-width: 2100px; table-layout: fixed; font-size: 12px; }
     th {
       padding: 9px 10px; text-align: center; color: #5f6b7d; background: #f3f5f8;
       border: 1px solid #dce1e8; border-top: 0; font-size: 10px; text-transform: uppercase; letter-spacing: .35px;
@@ -125,7 +136,7 @@
     th:first-child, td:first-child { border-left: 0; }
     th:last-child, td:last-child { border-right: 0; }
     tbody tr:hover { background: #fbfcff; }
-    .data-table td { height: 54px; }
+    .data-table td { height: 38px; }
     .data-table .cell-center { text-align: center; }
     .data-table .cell-number { text-align: right; }
     .data-table input, .data-table select {
@@ -170,6 +181,17 @@
     .payment-subtable td { padding: 8px 9px; font-size: 12px; border: 1px solid #e8ebf0; height: auto; }
     .payment-subtable .cell-number { text-align: right; }
     .payment-empty { padding: 8px 0; font-size: 12px; color: var(--muted); }
+    .search-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 160px; }
+    .search-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 16px;
+      background: #eef2f8; color: #425066; font-size: 11px;
+    }
+    .search-chip button { border: 0; background: transparent; color: #7a8799; cursor: pointer; padding: 0 2px; }
+    .spec-block { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #dbe1ea; }
+    .spec-block:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+    .spec-head { font-size: 12px; margin-bottom: 6px; color: #334155; }
+    .row-spec .main-cell { font-weight: 600; color: #475569; }
+    .row-spec td:first-child + td { padding-left: 22px; }
     .main-cell { font-weight: 650; }
     .sub-cell { margin-top: 2px; color: var(--muted); font-size: 12px; max-width: 310px; }
     .money { white-space: nowrap; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -227,6 +249,7 @@
       width: 100%; border: 1px solid #dce1e9; border-radius: 9px; padding: 10px 11px;
       outline: none; color: var(--ink); background: white;
     }
+    input[type="checkbox"] { width: auto; }
     input:focus, select:focus, textarea:focus { border-color: #7ca0f1; box-shadow: 0 0 0 3px #edf3ff; }
     textarea { min-height: 75px; resize: vertical; }
     .toast {
@@ -266,56 +289,29 @@
       <strong>Реестр договоров<br>и платежей</strong>
     </div>
     <nav class="nav">
-      <button class="active" data-page="dashboard"><span class="icon">⌂</span><span>Обзор</span></button>
+      <button class="active" data-page="analytics"><span class="icon">◫</span><span>Аналитика</span></button>
       <button data-page="contracts"><span class="icon">▤</span><span>Договоры</span></button>
       <button data-page="payments"><span class="icon">₽</span><span>Платежи</span></button>
-      <button data-page="analytics"><span class="icon">◫</span><span>Аналитика</span></button>
       <button data-page="history"><span class="icon">↶</span><span>История изменений</span></button>
     </nav>
   </aside>
 
   <main>
     <header class="topbar">
-      <h1 id="top-title">Обзор</h1>
+      <h1 id="top-title">Аналитика</h1>
       <div class="sync"><span class="sync-dot"></span><span id="sync-text">Данные загружены</span></div>
     </header>
     <div class="content">
-      <section class="page active" id="page-dashboard">
-        <div class="page-head">
-          <div><h2>Финансовый обзор</h2><p>Главные показатели по действующим договорам</p></div>
-          <button class="btn primary" onclick="startContractRow()">+ Новый договор</button>
-        </div>
-        <div class="cards" id="dashboard-cards"></div>
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel-head"><h3>Исполнение договоров</h3><button class="btn" onclick="navigate('contracts')">Все договоры</button></div>
-            <div class="panel-body" id="utilization-chart"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>Последние операции</h3><button class="btn" onclick="startPaymentRow()">+ Платеж</button></div>
-            <div id="recent-payments"></div>
-          </div>
-        </div>
-      </section>
-
       <section class="page" id="page-contracts">
         <div class="page-head">
           <div><h2>Договоры</h2><p>Лимиты, исполнение и остатки в одном реестре</p></div>
           <button class="btn primary" onclick="startContractRow()">+ Добавить строку</button>
         </div>
         <div class="toolbar">
-          <input class="search" id="contract-search" placeholder="Поиск по номеру, контрагенту или проекту…">
-          <select class="filter" id="contract-direction">
-            <option value="">Все направления</option>
-            <option value="income">Доходные</option>
-            <option value="expense">Расходные</option>
-          </select>
-          <select class="filter" id="contract-status">
-            <option value="">Все статусы</option>
-            <option value="draft">Черновик</option>
-            <option value="active">Действует</option>
-            <option value="closed">Завершен</option>
-          </select>
+          <select class="filter filter-field" id="contract-filter-field" onchange="syncFilterValue('contract')"></select>
+          <span id="contract-filter-value"></span>
+          <button type="button" class="btn" onclick="addStructuredFilter('contract')">+ фильтр</button>
+          <div class="search-chips" id="contract-filter-chips"></div>
         </div>
         <div class="panel"><div class="table-wrap" id="contracts-table"></div></div>
       </section>
@@ -326,36 +322,26 @@
           <button class="btn primary" onclick="startPaymentRow()">+ Добавить строку</button>
         </div>
         <div class="toolbar">
-          <input class="search" id="payment-search" placeholder="Поиск по номеру, договору или контрагенту…">
-          <select class="filter" id="payment-type">
-            <option value="">Все операции</option>
-            <option value="income">Поступления</option>
-            <option value="expense">Платежи</option>
-          </select>
-          <select class="filter" id="payment-status">
-            <option value="">Все статусы</option>
-            <option value="planned">Запланирован</option>
-            <option value="paid">Исполнен</option>
-            <option value="cancelled">Отменен</option>
-          </select>
+          <select class="filter filter-field" id="payment-filter-field" onchange="syncFilterValue('payment')"></select>
+          <span id="payment-filter-value"></span>
+          <button type="button" class="btn" onclick="addStructuredFilter('payment')">+ фильтр</button>
+          <div class="search-chips" id="payment-filter-chips"></div>
         </div>
-        <div class="panel"><div class="table-note">Платеж связывается с договором; исполненные операции автоматически меняют остаток.</div><div class="table-wrap" id="payments-table"></div></div>
+        <div class="panel"><div class="table-wrap" id="payments-table"></div></div>
       </section>
 
-      <section class="page" id="page-analytics">
+      <section class="page active" id="page-analytics">
         <div class="page-head">
-          <div><h2>Аналитика</h2><p>План-факт и структура финансовых потоков</p></div>
+          <div><h2>Финансовый дашборд</h2><p>Лимиты, факт и свободный остаток по договорам и спецификациям</p></div>
         </div>
         <div class="cards" id="analytics-cards"></div>
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel-head"><h3>План-факт по проектам</h3></div>
-            <div class="panel-body" id="project-analytics"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>Контроль остатков</h3></div>
-            <div class="table-wrap" id="balance-analytics"></div>
-          </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Договоры</h3></div>
+          <div class="table-wrap" id="analytics-tree"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Прочие расходы</h3></div>
+          <div class="table-wrap" id="analytics-other"></div>
         </div>
       </section>
 
@@ -381,16 +367,51 @@
   const API = '/api/data';
   const rub = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
   const dateFmt = new Intl.DateTimeFormat('ru-RU');
-  let state = { contracts: [], payments: [], history: [] };
+  let state = { contracts: [], payments: [], specifications: [], history: [] };
   let formContext = null;
   let editing = null;
   const expandedContracts = new Set();
+  const activeFilters = { contract: [], payment: [] };
+  const VAT_RATES = [0, 5, 7, 10, 20, 22];
+  const FILTER_DEFS = {
+    contract: [
+      {id:'number', label:'Номер договора'},
+      {id:'documentCard', label:'Карта документа'},
+      {id:'reviewDate', label:'Дата рассмотрения', type:'date'},
+      {id:'registrationDate', label:'Дата регистрации', type:'date'},
+      {id:'counterparty', label:'Контрагент'},
+      {id:'subject', label:'Предмет договора'},
+      {id:'fundingSource', label:'Источник финансирования'},
+      {id:'project', label:'Проект'},
+      {id:'responsible', label:'ФИО ответственного'},
+      {id:'comment', label:'Комментарий'},
+      {id:'documentKind', label:'Вид документа', type:'select', options:[['contract','Договор'],['invoice','Счёт'],['none','Без договора']]},
+      {id:'direction', label:'Вид договора', type:'select', options:[['income','Доходный'],['expense','Расходный']]},
+      {id:'kind', label:'Рамочный / нерамочный', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]},
+      {id:'category', label:'Категория', type:'select', options:[['limit','Лимит'],['specification','Спецификация'],['request','Заявка'],['addendum','Доп. соглашение']]},
+      {id:'startDate', label:'Дата начала', type:'date'},
+      {id:'endDate', label:'Дата окончания', type:'date'}
+    ],
+    payment: [
+      {id:'documentCard', label:'Карта документа'},
+      {id:'number', label:'Номер документа'},
+      {id:'approvalDate', label:'Дата согласования', type:'date'},
+      {id:'paymentDate', label:'Дата оплаты', type:'date'},
+      {id:'counterparty', label:'Контрагент'},
+      {id:'bdds', label:'Статья БДДС'},
+      {id:'cfo', label:'ЦФО'},
+      {id:'paymentKind', label:'Вид оплаты', type:'select', options:[['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']]},
+      {id:'responsible', label:'ФИО ответственного'}
+    ]
+  };
 
   const labels = {
     income: 'Доходный', expense: 'Расходный', framework: 'Рамочный', fixed: 'Нерамочный',
     draft: 'Черновик', active: 'Действует', closed: 'Завершен',
     planned: 'Запланирован', paid: 'Исполнен', cancelled: 'Отменен',
-    advance: 'Аванс', postpay: 'Постоплата', stage: 'Этап'
+    advance: 'Аванс', postpay: 'Постоплата', stage: 'ГУ', gu: 'ГУ',
+    contract: 'Договор', invoice: 'Счёт', none: 'Без договора',
+    limit: 'Лимит', specification: 'Спецификация', request: 'Заявка', addendum: 'Доп. соглашение'
   };
 
   function esc(value = '') {
@@ -400,11 +421,102 @@
   function showDate(value) { return value ? dateFmt.format(new Date(value + 'T00:00:00')) : '—'; }
   function uid(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
   function contractById(id) { return state.contracts.find(c => c.id === id); }
-  function completedPayments(contractId) {
-    return state.payments.filter(p => p.contractId === contractId && p.status === 'paid')
-      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  function specsForContract(contractId) {
+    return (state.specifications || []).filter(s => s.contractId === contractId);
   }
-  function contractBalance(contract) { return Number(contract.amount || 0) - completedPayments(contract.id); }
+  function specById(id) { return (state.specifications || []).find(s => s.id === id); }
+  function completedPayments(contractId, specificationId = '') {
+    return state.payments.filter(p =>
+      p.contractId === contractId &&
+      p.status === 'paid' &&
+      (specificationId ? p.specificationId === specificationId : true)
+    ).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  }
+  function specPayRemainder(spec) {
+    return Number(spec.amount || 0) - completedPayments(spec.contractId, spec.id);
+  }
+  function contractLimitRemainder(contract) {
+    if (contract.kind !== 'framework') return null;
+    const specSum = specsForContract(contract.id).reduce((s, x) => s + Number(x.amount || 0), 0);
+    return Number(contract.amount || 0) - specSum;
+  }
+  function contractPayRemainder(contract) {
+    return Number(contract.amount || 0) - completedPayments(contract.id);
+  }
+  function contractBalance(contract) { return contractPayRemainder(contract); }
+  function amountWithoutVat(amount, vatRate) {
+    const amt = Number(amount) || 0;
+    const vr = Number(vatRate) || 0;
+    return vr ? Math.round(amt / (1 + vr / 100) * 100) / 100 : amt;
+  }
+  function optionTags(pairs, current) {
+    return pairs.map(([value, label]) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`).join('');
+  }
+  function vatSum(amount, vatRate) {
+    const gross = Number(amount) || 0;
+    return Math.round((gross - amountWithoutVat(gross, vatRate)) * 100) / 100;
+  }
+  function contractField(c, id) {
+    if (id === 'reviewDate') return c.reviewDate || c.date || '';
+    if (id === 'registrationDate') return c.registrationDate || c.date || '';
+    return c[id] || '';
+  }
+  function paymentField(p, id) {
+    if (id === 'counterparty') return contractById(p.contractId)?.counterparty || '';
+    if (id === 'approvalDate') return p.approvalDate || p.date || '';
+    if (id === 'paymentDate') return p.paymentDate || p.date || '';
+    if (id === 'paymentKind') return p.paymentKind === 'stage' ? 'gu' : (p.paymentKind || '');
+    return p[id] || '';
+  }
+  function rowMatches(entity, filters, getter) {
+    return filters.every(filter => {
+      const raw = String(getter(entity, filter.field) || '');
+      if (filter.type === 'date') return raw.slice(0, 10) === filter.value;
+      if (filter.type === 'select') return raw === filter.value;
+      return raw.toLowerCase().includes(filter.value.toLowerCase());
+    });
+  }
+  function syncFilterValue(kind) {
+    const fieldId = document.getElementById(`${kind}-filter-field`).value;
+    const field = FILTER_DEFS[kind].find(item => item.id === fieldId);
+    const host = document.getElementById(`${kind}-filter-value`);
+    if (field.type === 'select') {
+      host.innerHTML = `<select class="filter" id="${kind}-filter-input">${optionTags(field.options, field.options[0][0])}</select>`;
+    } else if (field.type === 'date') {
+      host.innerHTML = `<input class="filter" id="${kind}-filter-input" type="date">`;
+    } else {
+      host.innerHTML = `<input class="filter" id="${kind}-filter-input" placeholder="Значение" onkeydown="if(event.key==='Enter'){addStructuredFilter('${kind}');event.preventDefault();}">`;
+    }
+  }
+  function renderFilterChips(kind) {
+    document.getElementById(`${kind}-filter-chips`).innerHTML = activeFilters[kind].map((filter, index) =>
+      `<span class="search-chip">${esc(filter.title)}<button type="button" onclick="removeStructuredFilter('${kind}',${index})">×</button></span>`
+    ).join('');
+  }
+  function addStructuredFilter(kind) {
+    if (activeFilters[kind].length >= 10) { toast('Не больше 10 фильтров'); return; }
+    const fieldId = document.getElementById(`${kind}-filter-field`).value;
+    const field = FILTER_DEFS[kind].find(item => item.id === fieldId);
+    const input = document.getElementById(`${kind}-filter-input`);
+    const value = (input.value || '').trim();
+    if (!value) return;
+    const shown = field.type === 'select' ? (field.options.find(option => option[0] === value)?.[1] || value) : value;
+    activeFilters[kind].push({field: fieldId, value, type: field.type || 'text', title: `${field.label}: ${shown}`});
+    if (input.tagName === 'INPUT' && input.type !== 'date') input.value = '';
+    renderFilterChips(kind);
+    kind === 'contract' ? renderContracts() : renderPayments();
+  }
+  function removeStructuredFilter(kind, index) {
+    activeFilters[kind].splice(index, 1);
+    renderFilterChips(kind);
+    kind === 'contract' ? renderContracts() : renderPayments();
+  }
+  function initFilters() {
+    ['contract', 'payment'].forEach(kind => {
+      document.getElementById(`${kind}-filter-field`).innerHTML = FILTER_DEFS[kind].map(field => `<option value="${field.id}">${field.label}</option>`).join('');
+      syncFilterValue(kind);
+    });
+  }
   function statusBadge(status) {
     const colors = {active:'green', paid:'green', draft:'gray', planned:'blue', closed:'gray', cancelled:'red'};
     return `<span class="badge ${colors[status] || 'gray'}">${labels[status] || status}</span>`;
@@ -416,6 +528,7 @@
       if (!response.ok) throw new Error();
       state = await response.json();
       state.history ||= [];
+      state.specifications ||= [];
       renderAll();
     } catch {
       toast('Не удалось загрузить данные');
@@ -435,7 +548,11 @@
   }
 
   function dataSnapshot() {
-    return JSON.parse(JSON.stringify({contracts: state.contracts, payments: state.payments}));
+    return JSON.parse(JSON.stringify({
+      contracts: state.contracts,
+      payments: state.payments,
+      specifications: state.specifications || []
+    }));
   }
   function addHistory(action, entityType, label, before) {
     state.history ||= [];
@@ -451,7 +568,7 @@
   function navigate(page) {
     document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.id === `page-${page}`));
     document.querySelectorAll('.nav button').forEach(el => el.classList.toggle('active', el.dataset.page === page));
-    const names = {dashboard:'Обзор', contracts:'Договоры', payments:'Платежи', analytics:'Аналитика', history:'История изменений'};
+    const names = {contracts:'Договоры', payments:'Платежи', analytics:'Аналитика', history:'История изменений'};
     document.getElementById('top-title').textContent = names[page];
   }
   document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
@@ -468,190 +585,288 @@
   function metric(label, value, note, noteClass = '') {
     return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note ${noteClass}">${note}</div></div>`;
   }
-  function renderDashboard() {
-    const t = totals();
-    const nearing = t.active.filter(c => c.endDate && (new Date(c.endDate) - new Date()) / 86400000 <= 45 && new Date(c.endDate) >= new Date()).length;
-    document.getElementById('dashboard-cards').innerHTML =
-      metric('Доходы · факт', money(t.incomeFact), `из ${money(t.incomeLimit)} по договорам`, 'good') +
-      metric('Расходы · факт', money(t.expenseFact), `из ${money(t.expenseLimit)} по договорам`) +
-      metric('Фактический баланс', money(t.incomeFact - t.expenseFact), 'поступления минус платежи', t.incomeFact >= t.expenseFact ? 'good' : 'warn') +
-      metric('Действующие договоры', t.active.length, nearing ? `${nearing} скоро завершатся` : 'нет ближайших завершений', nearing ? 'warn' : '');
-
-    const contracts = [...t.active].sort((a,b) => (completedPayments(b.id)/b.amount) - (completedPayments(a.id)/a.amount)).slice(0,6);
-    document.getElementById('utilization-chart').innerHTML = contracts.length ? contracts.map(c => {
-      const fact = completedPayments(c.id);
-      const percent = c.amount ? Math.round(fact / c.amount * 100) : 0;
-      return `<div class="chart-row"><div class="chart-label" title="${esc(c.counterparty)}">${esc(c.number)} · ${esc(c.counterparty)}</div>
-        <div class="chart-track"><div class="chart-bar ${c.direction === 'expense' ? 'expense' : ''}" style="width:${Math.min(percent,100)}%"></div></div>
-        <div class="chart-value">${percent}%</div></div>`;
-    }).join('') : '<div class="empty">Добавьте первый договор</div>';
-
-    const recent = [...state.payments].sort((a,b) => b.date.localeCompare(a.date)).slice(0,5);
-    document.getElementById('recent-payments').innerHTML = recent.length ? `<table><tbody>${recent.map(p => {
-      const c = contractById(p.contractId);
-      return `<tr><td><div class="main-cell">${esc(p.number)}</div><div class="sub-cell">${c ? esc(c.counterparty) : 'Без договора'} · ${showDate(p.date)}</div></td>
-      <td class="money" style="color:${p.type === 'income' ? 'var(--green)' : 'var(--ink)'}">${p.type === 'income' ? '+' : '−'}${money(p.amount)}</td></tr>`;
-    }).join('')}</tbody></table>` : '<div class="empty">Операций пока нет</div>';
+  function paymentsForContract(contractId, specificationId = '') {
+    return state.payments.filter(p =>
+      p.contractId === contractId && (specificationId ? p.specificationId === specificationId : true)
+    ).sort((a, b) => b.date.localeCompare(a.date));
   }
-
-  function paymentsForContract(contractId) {
-    return state.payments.filter(p => p.contractId === contractId).sort((a, b) => b.date.localeCompare(a.date));
+  function paymentsMiniTable(payments) {
+    if (!payments.length) return '<div class="payment-empty">Операций нет</div>';
+    return `<table class="payment-subtable"><thead><tr>
+      <th>№ / дата</th><th>Вид</th><th>Сумма</th><th>Статус</th><th>Комментарий</th><th></th>
+      </tr></thead><tbody>${payments.map(p => `<tr>
+        <td><div class="main-cell">${esc(p.number)}</div><div class="sub-cell">${showDate(p.paymentDate || p.date)}</div></td>
+        <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Пост.' : 'Плат.'}</span></td>
+        <td class="money cell-number">${money(p.amount)}</td>
+        <td class="cell-center">${statusBadge(p.status)}</td>
+        <td>${esc(p.comment || '—')}</td>
+        <td class="cell-center"><button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button></td>
+      </tr>`).join('')}</tbody></table>`;
   }
   function toggleContractExpand(contractId) {
     if (expandedContracts.has(contractId)) expandedContracts.delete(contractId);
     else expandedContracts.add(contractId);
     renderContracts();
   }
-  function contractPaymentsDetail(contractId, contractNumber) {
-    const payments = paymentsForContract(contractId);
-    if (!payments.length) {
-      return `<div class="payment-detail"><div class="payment-empty">По договору № ${esc(contractNumber)} операций пока нет.</div></div>`;
+  function contractDetailBlock(c) {
+    const specs = specsForContract(c.id);
+    if (c.kind === 'framework' && specs.length) {
+      const loose = paymentsForContract(c.id).filter(p => !p.specificationId);
+      return `<div class="payment-detail">${specs.map(s => {
+        const remain = specPayRemainder(s);
+        return `<div class="spec-block"><div class="spec-head"><strong>Спецификация ${esc(s.number)}</strong> · ${esc(s.subject)} · лимит ${money(s.amount)} · <span style="color:${remain < 0 ? 'var(--red)' : 'inherit'}">остаток оплат: ${money(remain)}</span></div>${paymentsMiniTable(paymentsForContract(c.id, s.id))}</div>`;
+      }).join('')}${loose.length ? `<div class="spec-block"><div class="spec-head">Платежи вне спецификации</div>${paymentsMiniTable(loose)}</div>` : ''}</div>`;
     }
-    const paidSum = payments.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount), 0);
-    return `<div class="payment-detail">
-      <div class="payment-detail-head"><span>Операции по договору · ${payments.length}</span><span>Исполнено: ${money(paidSum)}</span></div>
-      <table class="payment-subtable"><thead><tr>
-        <th style="width:14%">№ / дата</th><th style="width:12%">Вид</th><th style="width:14%">Сумма</th><th style="width:12%">Статус</th><th>Комментарий</th><th style="width:44px"></th>
-      </tr></thead><tbody>${payments.map(p => `<tr>
-        <td><div class="main-cell">${esc(p.number)}</div><div class="sub-cell">${showDate(p.date)} · ${labels[p.paymentKind] || '—'}</div></td>
-        <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Поступление' : 'Платеж'}</span></td>
-        <td class="money cell-number">${money(p.amount)}</td>
-        <td class="cell-center">${statusBadge(p.status)}</td>
-        <td>${esc(p.comment || '—')}</td>
-        <td class="cell-center"><button class="icon-btn" title="Изменить" onclick="startPaymentRow('${p.id}')">✎</button></td>
-      </tr>`).join('')}</tbody></table>
-    </div>`;
+    return `<div class="payment-detail">${paymentsMiniTable(paymentsForContract(c.id))}</div>`;
   }
 
   function filteredContracts() {
-    const query = document.getElementById('contract-search').value.toLowerCase();
-    const direction = document.getElementById('contract-direction').value;
-    const status = document.getElementById('contract-status').value;
-    return state.contracts.filter(c =>
-      (!query || [c.number,c.counterparty,c.project,c.subject].some(x => String(x || '').toLowerCase().includes(query))) &&
-      (!direction || c.direction === direction) && (!status || c.status === status)
-    );
+    return state.contracts.filter(c => rowMatches(c, activeFilters.contract, contractField));
   }
   function renderContracts() {
     const rows = filteredContracts();
     const editItem = editing?.type === 'contract'
-      ? (editing.isNew ? {id:'new', direction:'expense', kind:'fixed', vatRate:20, status:'active'} : state.contracts.find(c => c.id === editing.id))
+      ? (editing.isNew ? {id:'new', direction:'expense', kind:'fixed', documentKind:'contract', category:'limit', vatRate:20, status:'active'} : state.contracts.find(c => c.id === editing.id))
       : null;
+    const colSpan = 23;
     const body = `${editItem && editing.isNew ? contractEditRow(editItem) : ''}${rows.map(c => {
         if (editItem && c.id === editing.id) return contractEditRow(c);
-        const fact = completedPayments(c.id), balance = Number(c.amount) - fact, percent = c.amount ? Math.round(fact/c.amount*100) : 0;
-        const payCount = paymentsForContract(c.id).length;
+        const limitRem = contractLimitRemainder(c);
+        const payRem = contractPayRemainder(c);
+        const wovat = c.amountWithoutVat ?? amountWithoutVat(c.amount, c.vatRate);
+        const childCount = paymentsForContract(c.id).length + specsForContract(c.id).length;
         const open = expandedContracts.has(c.id);
         return `<tr>
-          <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="Платежи по договору"><span class="chev">▸</span>${payCount ? `<span class="count">${payCount}</span>` : ''}</button></td>
-          <td><div class="main-cell">№ ${esc(c.number)}</div><div class="sub-cell">${showDate(c.date)}</div></td>
+          <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="Спецификации и платежи"><span class="chev">▸</span>${childCount ? `<span class="count">${childCount}</span>` : ''}</button></td>
+          <td><div class="main-cell">№ ${esc(c.number)}</div></td>
+          <td>${esc(c.documentCard || '—')}</td>
+          <td>${showDate(c.reviewDate || c.date)}</td>
+          <td>${showDate(c.registrationDate || c.date)}</td>
           <td><div class="main-cell">${esc(c.counterparty)}</div></td>
-          <td><div>${esc(c.subject)}</div></td>
-          <td><span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span><div class="sub-cell">${labels[c.kind]}</div></td>
+          <td>${esc(c.subject)}</td>
           <td class="money cell-number">${money(c.amount)}</td>
-          <td class="cell-number"><div class="money">${money(fact)}</div><div class="progress ${percent > 100 ? 'over' : ''}"><span style="width:${Math.min(percent,100)}%"></span></div></td>
-          <td class="money cell-number" style="color:${balance < 0 ? 'var(--red)' : ''}">${money(balance)}</td>
+          <td class="cell-center">${c.vatRate ? c.vatRate + '%' : '—'}</td>
+          <td class="money cell-number">${money(wovat)}</td>
+          <td>${esc(c.fundingSource || '—')}</td>
           <td>${esc(c.project || '—')}</td>
-          <td class="cell-center">${statusBadge(c.status)}</td>
+          <td>${esc(c.responsible || '—')}</td>
+          <td><div class="sub-cell">${esc(c.comment || '—')}</div></td>
+          <td class="cell-center">${labels[c.documentKind] || '—'}</td>
+          <td class="cell-center"><span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span></td>
+          <td class="cell-center">${labels[c.kind]}</td>
+          <td class="cell-center">${labels[c.category] || '—'}</td>
+          <td>${showDate(c.startDate)}</td>
+          <td>${showDate(c.endDate)}</td>
+          <td class="money cell-number">${limitRem === null ? '—' : money(limitRem)}</td>
+          <td class="money cell-number" style="color:${payRem < 0 ? 'var(--red)' : ''}">${money(payRem)}</td>
           <td><div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${c.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${c.id}')">⌫</button></div></td>
-        </tr>${open ? `<tr class="detail-row"><td colspan="11">${contractPaymentsDetail(c.id, c.number)}</td></tr>` : ''}`;
+        </tr>${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
       }).join('')}`;
     document.getElementById('contracts-table').innerHTML = body ? `<table class="data-table"><thead><tr>
-      <th class="w-expand" aria-label="Платежи"></th><th class="w-number">Договор / дата</th><th>Контрагент</th><th>Предмет</th><th class="w-type">Тип</th>
-      <th class="w-money">Лимит</th><th class="w-money">Исполнено</th><th class="w-money">Остаток</th>
-      <th>Проект</th><th class="w-status">Статус</th><th class="w-actions"></th>
+      <th class="w-expand"></th><th class="w-number">Номер</th><th>Карта</th><th class="w-date">Рассмотр.</th><th class="w-date">Регистр.</th>
+      <th>Контрагент</th><th>Предмет</th><th class="w-money">Σ с НДС</th><th>НДС</th><th class="w-money">Без НДС</th>
+      <th>Источник</th><th>Проект</th><th>Ответств.</th><th>Коммент.</th><th>Вид док.</th>
+      <th class="w-type">Вид</th><th class="w-type">Подвид</th><th>Категория</th>
+      <th class="w-date">Начало</th><th class="w-date">Оконч.</th><th class="w-money">Ост. лимита</th><th class="w-money">Ост. оплат</th><th class="w-actions"></th>
       </tr></thead><tbody>${body}</tbody></table>` : '<div class="empty">Ничего не найдено</div>';
   }
 
   function contractEditRow(c) {
     return `<tr class="edit-row" id="contract-edit-row">
       <td class="expand-col"></td>
-      <td><input name="number" required value="${esc(c.number)}" placeholder="№"><input name="date" type="date" required value="${esc(c.date)}"></td>
+      <td><input name="number" required value="${esc(c.number)}" placeholder="№"></td>
+      <td><input name="documentCard" value="${esc(c.documentCard)}" placeholder="Карта"></td>
+      <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}"></td>
+      <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
       <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент"></td>
       <td><input name="subject" required value="${esc(c.subject)}" placeholder="Предмет"></td>
-      <td><select name="direction"><option value="income" ${c.direction==='income'?'selected':''}>Доход</option><option value="expense" ${c.direction==='expense'?'selected':''}>Расход</option></select>
-        <select name="kind"><option value="fixed" ${c.kind==='fixed'?'selected':''}>Нерамочный</option><option value="framework" ${c.kind==='framework'?'selected':''}>Рамочный</option></select></td>
-      <td><input name="amount" type="number" min="0" step="0.01" required value="${c.amount || ''}" placeholder="0"><select name="vatRate">${[0,5,7,10,20].map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v ? 'НДС '+v+'%' : 'Без НДС'}</option>`).join('')}</select></td>
-      <td class="cell-number">${money(c.id === 'new' ? 0 : completedPayments(c.id))}</td>
-      <td class="cell-number">${money(c.id === 'new' ? 0 : contractBalance(c))}</td>
+      <td><input name="amount" type="number" min="0" step="0.01" required value="${c.amount || ''}" placeholder="0"></td>
+      <td><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v ? v + '%' : '—'}</option>`).join('')}</select></td>
+      <td class="cell-number">—</td>
+      <td><input name="fundingSource" value="${esc(c.fundingSource)}" placeholder="Источник"></td>
       <td><input name="project" value="${esc(c.project)}" placeholder="Проект"></td>
-      <td><select name="status"><option value="draft" ${c.status==='draft'?'selected':''}>Черновик</option><option value="active" ${c.status==='active'?'selected':''}>Действует</option><option value="closed" ${c.status==='closed'?'selected':''}>Завершен</option></select></td>
+      <td><input name="responsible" value="${esc(c.responsible)}" placeholder="ФИО"></td>
+      <td><input name="comment" value="${esc(c.comment)}" placeholder="Комментарий"><label style="font-weight:500;margin-top:4px"><input type="checkbox" name="otherExpense" ${c.otherExpense ? 'checked' : ''}> Прочие расходы</label></td>
+      <td><select name="documentKind">${optionTags([['contract','Договор'],['invoice','Счёт'],['none','Без договора']], c.documentKind || 'contract')}</select></td>
+      <td><select name="direction">${optionTags([['income','Доходный'],['expense','Расходный']], c.direction || 'expense')}</select></td>
+      <td><select name="kind">${optionTags([['fixed','Нерамочный'],['framework','Рамочный']], c.kind || 'fixed')}</select></td>
+      <td><select name="category">${optionTags([['limit','Лимит'],['specification','Спецификация'],['request','Заявка'],['addendum','Доп. соглашение']], c.category || 'limit')}</select></td>
+      <td><input name="startDate" type="date" value="${esc(c.startDate)}"></td>
+      <td><input name="endDate" type="date" value="${esc(c.endDate)}"></td>
+      <td class="cell-number">—</td>
+      <td class="cell-number">—</td>
       <td><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="saveContractRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
     </tr>`;
   }
 
   function filteredPayments() {
-    const query = document.getElementById('payment-search').value.toLowerCase();
-    const type = document.getElementById('payment-type').value;
-    const status = document.getElementById('payment-status').value;
-    return state.payments.filter(p => {
-      const c = contractById(p.contractId);
-      return (!query || [p.number,c?.number,c?.counterparty,p.comment].some(x => String(x || '').toLowerCase().includes(query))) &&
-        (!type || p.type === type) && (!status || p.status === status);
-    });
+    return state.payments.filter(p => rowMatches(p, activeFilters.payment, paymentField));
   }
   function renderPayments() {
-    const rows = filteredPayments().sort((a,b) => b.date.localeCompare(a.date));
+    const rows = filteredPayments().sort((a,b) => String(b.paymentDate || b.date).localeCompare(String(a.paymentDate || a.date)));
     const editItem = editing?.type === 'payment'
-      ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', status:'paid'} : state.payments.find(p => p.id === editing.id))
+      ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', documentKind:'contract', subtype:'invoice', status:'paid', approvalVatRate:20} : state.payments.find(p => p.id === editing.id))
       : null;
     const body = `${editItem && editing.isNew ? paymentEditRow(editItem) : ''}${rows.map(p => {
         if (editItem && p.id === editing.id) return paymentEditRow(p);
         const c = contractById(p.contractId);
+        const gross = p.approvalAmount ?? p.amount;
+        const rate = p.approvalVatRate ?? 20;
+        const wovat = p.approvalAmountWithoutVat ?? amountWithoutVat(gross, rate);
+        const vat = p.approvalVatAmount ?? vatSum(gross, rate);
+        const kind = p.paymentKind === 'stage' ? 'gu' : p.paymentKind;
         return `<tr>
-          <td><div class="main-cell">${esc(p.number)}</div><div class="sub-cell">${showDate(p.date)} · ${labels[p.paymentKind] || '—'}</div></td>
-          <td><div class="main-cell">${c ? '№ ' + esc(c.number) : 'Без договора'}</div><div class="sub-cell">${c ? esc(c.counterparty) : 'Свободная операция'}</div></td>
-          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Поступление' : 'Платеж'}</span></td>
-          <td class="money cell-number">${money(p.amount)}</td><td class="cell-center">${statusBadge(p.status)}</td>
-          <td>${esc(p.comment || '—')}</td>
+          <td>${esc(p.documentCard || '—')}</td>
+          <td><div class="main-cell">${esc(p.number)}</div></td>
+          <td>${showDate(p.approvalDate || p.date)}</td>
+          <td>${showDate(p.paymentDate || p.date)}</td>
+          <td>${esc(c?.counterparty || '—')}</td>
+          <td class="cell-center">${labels[p.documentKind] || '—'}</td>
+          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Поступление' : 'Оплата'}</span></td>
+          <td class="cell-center">${labels[p.subtype] || '—'}</td>
+          <td>${esc(p.bdds || '—')}</td>
+          <td>${esc(p.cfo || '—')}</td>
+          <td class="money cell-number">${money(gross)}</td>
+          <td class="money cell-number">${money(vat)}</td>
+          <td class="money cell-number">${money(wovat)}</td>
+          <td class="money cell-number">${money(p.amount)}</td>
+          <td>${labels[kind] || '—'}</td>
+          <td>${esc(p.responsible || '—')}</td>
+          <td><div class="sub-cell">${esc(p.comment || '—')}</div></td>
           <td><div class="row-actions"><button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button><button class="icon-btn delete" onclick="removePayment('${p.id}')">⌫</button></div></td>
         </tr>`;
       }).join('')}`;
     document.getElementById('payments-table').innerHTML = body ? `<table class="data-table"><thead><tr>
-      <th class="w-number">Операция / дата</th><th>Договор / контрагент</th><th class="w-type">Вид</th>
-      <th class="w-money">Сумма</th><th class="w-status">Статус</th><th>Комментарий</th><th class="w-actions"></th>
+      <th>Карта</th><th class="w-number">Номер</th><th class="w-date">Соглас.</th><th class="w-date">Оплата</th><th>Контрагент</th>
+      <th>Вид док.</th><th class="w-type">Вид платежа</th><th>Подвид</th><th>БДДС</th><th>ЦФО</th>
+      <th class="w-money">Σ с НДС</th><th class="w-money">Σ НДС</th><th class="w-money">Без НДС</th><th class="w-money">Σ оплаты</th>
+      <th>Вид оплаты</th><th>Ответств.</th><th>Коммент.</th><th class="w-actions"></th>
       </tr></thead><tbody>${body}</tbody></table>` : '<div class="empty">Ничего не найдено</div>';
   }
 
   function paymentEditRow(p) {
+    const kind = p.paymentKind === 'stage' ? 'gu' : (p.paymentKind || 'postpay');
+    const specs = (state.specifications || []).filter(s => !p.contractId || s.contractId === p.contractId);
     return `<tr class="edit-row" id="payment-edit-row">
-      <td><input name="number" required value="${esc(p.number)}" placeholder="П-001"><input name="date" type="date" required value="${esc(p.date)}"></td>
-      <td><select name="contractId" required><option value="">Выберите договор</option>${state.contracts.map(c => `<option value="${c.id}" ${p.contractId===c.id?'selected':''}>№ ${esc(c.number)} · ${esc(c.counterparty)}</option>`).join('')}</select>
-        <select name="paymentKind"><option value="advance" ${p.paymentKind==='advance'?'selected':''}>Аванс</option><option value="postpay" ${p.paymentKind==='postpay'?'selected':''}>Постоплата</option><option value="stage" ${p.paymentKind==='stage'?'selected':''}>Этап</option></select></td>
-      <td><select name="type"><option value="income" ${p.type==='income'?'selected':''}>Поступление</option><option value="expense" ${p.type==='expense'?'selected':''}>Платеж</option></select></td>
-      <td><input name="amount" type="number" min="0.01" step="0.01" required value="${p.amount || ''}" placeholder="0"></td>
-      <td><select name="status"><option value="planned" ${p.status==='planned'?'selected':''}>Запланирован</option><option value="paid" ${p.status==='paid'?'selected':''}>Исполнен</option><option value="cancelled" ${p.status==='cancelled'?'selected':''}>Отменен</option></select></td>
+      <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта"></td>
+      <td><input name="number" required value="${esc(p.number)}" placeholder="П-001"></td>
+      <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}"></td>
+      <td><input name="paymentDate" type="date" required value="${esc(p.paymentDate || p.date)}"></td>
+      <td><select name="contractId" required><option value="">Договор</option>${state.contracts.map(c => `<option value="${c.id}" ${p.contractId===c.id?'selected':''}>№ ${esc(c.number)}</option>`).join('')}</select></td>
+      <td><select name="documentKind">${optionTags([['contract','Договор'],['invoice','Счёт'],['none','Без договора']], p.documentKind || 'contract')}</select></td>
+      <td><select name="type">${optionTags([['income','Поступление'],['expense','Оплата']], p.type || 'expense')}</select></td>
+      <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || (p.specificationId ? 'specification' : 'invoice'))}</select>
+        <select name="specificationId"><option value="">—</option>${specs.map(s => `<option value="${s.id}" ${p.specificationId===s.id?'selected':''}>${esc(s.number)}</option>`).join('')}</select></td>
+      <td><input name="bdds" value="${esc(p.bdds)}" placeholder="БДДС"></td>
+      <td><input name="cfo" value="${esc(p.cfo)}" placeholder="ЦФО"></td>
+      <td><input name="approvalAmount" type="number" min="0" step="0.01" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма"></td>
+      <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? 20)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
+      <td class="cell-number">—</td>
+      <td><input name="amount" type="number" min="0.01" step="0.01" required value="${p.amount || ''}" placeholder="Оплата"></td>
+      <td><select name="paymentKind">${optionTags([['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']], kind)}</select></td>
+      <td><input name="responsible" value="${esc(p.responsible)}" placeholder="ФИО"></td>
       <td><input name="comment" value="${esc(p.comment)}" placeholder="Комментарий"></td>
       <td><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="savePaymentRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
     </tr>`;
   }
 
+  function progressCell(fact, limit) {
+    if (!limit) return '—';
+    const ratio = fact / limit;
+    return `<div class="progress ${ratio > 1 ? 'over' : ''}"><span style="width:${Math.max(0, Math.min(ratio, 1)) * 100}%"></span></div>`;
+  }
+  const TREE_HEAD = `<thead><tr>
+    <th>Договор</th><th>Рамочный/Нерамочный</th><th>Контрагент</th><th>Тип</th>
+    <th>Актуальный лимит</th><th>Факт</th><th>Остаток</th><th>Прогресс</th>
+    <th>№</th><th>Карта</th><th>Начало согл.</th><th>Заверш. согл.</th><th>Дата 1С</th>
+    <th>Контрагент платежа</th><th>Вид</th><th>Вид затрат</th><th>МВЗ</th><th>Проект</th><th>Ключевой контрагент</th>
+  </tr></thead>`;
+  const PAY_PAD = '<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>';
+  function analyticsPayRow(p, c, title) {
+    return `<tr class="row-pay">
+      <td>${esc(title)}</td><td></td><td></td><td></td><td></td>
+      <td class="money cell-number">${money(p.status === 'paid' ? p.amount : 0)}</td><td></td><td></td>
+      <td>${esc(p.number)}</td><td>${esc(p.documentCard || '')}</td>
+      <td>${showDate(p.approvalDate || p.date)}</td><td>${showDate(p.approvalEndDate)}</td><td>${showDate(p.postedDate || p.paymentDate)}</td>
+      <td>${esc(c.counterparty)}</td><td>${p.type === 'income' ? 'Поступление' : 'Платеж'}</td>
+      <td>${esc(p.costType || '—')}</td><td>${esc(p.mvz || p.cfo || '—')}</td>
+      <td>${esc(p.project || c.project || '—')}</td><td>${esc(p.keyCounterparty || '—')}</td>
+    </tr>`;
+  }
+  function analyticsContractRows(c) {
+    const fact = completedPayments(c.id);
+    const limit = Number(c.amount) || 0;
+    let html = `<tr class="row-contract">
+      <td>Договор № ${esc(c.number)} от ${showDate(c.date)}</td>
+      <td>${labels[c.kind] || '—'}</td><td>${esc(c.counterparty)}</td><td>${labels[c.direction]}</td>
+      <td class="money cell-number">${money(limit)}</td>
+      <td class="money cell-number">${money(fact)}</td>
+      <td class="money cell-number">${money(limit - fact)}</td>
+      <td>${progressCell(fact, limit)}</td>${PAY_PAD}
+    </tr>`;
+    const pays = paymentsForContract(c.id);
+    if (c.kind === 'framework') {
+      const free = contractLimitRemainder(c) || 0;
+      html += `<tr class="row-free"><td>[!] Свободный лимит (без спецификаций)</td><td></td><td></td><td></td><td class="money cell-number">${money(free)}</td><td></td><td></td><td></td>${PAY_PAD}</tr>`;
+      specsForContract(c.id).forEach(s => {
+        const specFact = completedPayments(c.id, s.id);
+        const specLimit = Number(s.amount) || 0;
+        html += `<tr class="row-spec"><td>Спецификация ${esc(s.number)}</td><td></td><td>${esc(s.subject)}</td><td></td>
+          <td class="money cell-number">${money(specLimit)}</td>
+          <td class="money cell-number">${money(specFact)}</td>
+          <td class="money cell-number">${money(specLimit - specFact)}</td>
+          <td>${progressCell(specFact, specLimit)}</td>${PAY_PAD}</tr>`;
+        pays.filter(p => p.specificationId === s.id).forEach(p => { html += analyticsPayRow(p, c, 'Оплата по спец.'); });
+      });
+      pays.filter(p => !p.specificationId).forEach(p => { html += analyticsPayRow(p, c, 'Оплата вне спецификации'); });
+    } else {
+      pays.forEach(p => { html += analyticsPayRow(p, c, 'Оплата (без специф.)'); });
+    }
+    return html;
+  }
+  function sumLimit(list) { return list.reduce((sum, c) => sum + Number(c.amount || 0), 0); }
+  function sumFact(list) { return list.reduce((sum, c) => sum + completedPayments(c.id), 0); }
+  function freeLimit(list) {
+    return list.filter(c => c.kind === 'framework').reduce((sum, c) => sum + (contractLimitRemainder(c) || 0), 0);
+  }
   function renderAnalytics() {
-    const t = totals();
-    const planned = state.payments.filter(p => p.status === 'planned').reduce((s,p) => s + Number(p.amount), 0);
-    const utilization = t.expenseLimit ? Math.round(t.expenseFact/t.expenseLimit*100) : 0;
+    const main = state.contracts.filter(c => !c.otherExpense);
+    const income = main.filter(c => c.direction === 'income');
+    const expense = main.filter(c => c.direction === 'expense');
+    const incomeLimit = sumLimit(income);
+    const expenseLimit = sumLimit(expense);
+    const incomeFact = sumFact(income);
+    const expenseFact = sumFact(expense);
     document.getElementById('analytics-cards').innerHTML =
-      metric('Плановая маржа', money(t.incomeLimit - t.expenseLimit), 'лимиты доходов минус расходы') +
-      metric('Фактическая маржа', money(t.incomeFact - t.expenseFact), 'по исполненным операциям', t.incomeFact >= t.expenseFact ? 'good' : 'warn') +
-      metric('Запланировано', money(planned), `${state.payments.filter(p => p.status === 'planned').length} операций`) +
-      metric('Исполнение расходов', `${utilization}%`, `остаток ${money(t.expenseLimit - t.expenseFact)}`);
+      metric('Доходы (лимит всего)', money(incomeLimit), 'без прочих расходов') +
+      metric('Доходы (факт)', money(incomeFact), 'исполненные поступления', 'good') +
+      metric('Расходы (лимит всего)', money(expenseLimit), 'без прочих расходов') +
+      metric('Расходы (факт всего)', money(expenseFact), 'исполненные оплаты') +
+      metric('Свободный лимит доходов', money(freeLimit(income)), 'рамочные, без спецификаций') +
+      metric('Свободный лимит расходов', money(freeLimit(expense)), 'рамочные, без спецификаций');
 
-    const projects = {};
-    state.contracts.forEach(c => {
-      const key = c.project || 'Без проекта';
-      projects[key] ||= {limit:0, fact:0, direction:c.direction};
-      projects[key].limit += Number(c.amount);
-      projects[key].fact += completedPayments(c.id);
-    });
-    const maxLimit = Math.max(1, ...Object.values(projects).map(x => x.limit));
-    document.getElementById('project-analytics').innerHTML = Object.entries(projects).length ? Object.entries(projects).map(([name,x]) =>
-      `<div class="chart-row"><div class="chart-label">${esc(name)}</div><div class="chart-track"><div class="chart-bar ${x.direction === 'expense' ? 'expense' : ''}" style="width:${x.limit/maxLimit*100}%"></div></div><div class="chart-value">${money(x.fact)} / ${money(x.limit)}</div></div>`
-    ).join('') : '<div class="empty">Нет данных для аналитики</div>';
+    const ordered = [...income, ...expense];
+    const totalLimit = sumLimit(expense);
+    const totalFact = sumFact(expense);
+    const balanceLimit = incomeLimit - expenseLimit;
+    const balanceFact = incomeFact - expenseFact;
+    const rows = ordered.map(analyticsContractRows).join('') + `<tr class="row-total">
+      <td>Итого по расходам</td><td></td><td></td><td></td>
+      <td class="money cell-number">${money(totalLimit)}</td>
+      <td class="money cell-number">${money(totalFact)}</td>
+      <td class="money cell-number">${money(totalLimit - totalFact)}</td><td></td>${PAY_PAD}
+    </tr><tr class="row-balance">
+      <td>Остаток (доход минус расходы)</td><td></td><td></td><td></td>
+      <td class="money cell-number">${money(balanceLimit)}</td>
+      <td class="money cell-number">${money(balanceFact)}</td>
+      <td class="money cell-number">${money((incomeLimit - incomeFact) - (expenseLimit - expenseFact))}</td><td></td>${PAY_PAD}
+    </tr>`;
+    document.getElementById('analytics-tree').innerHTML = `<table class="tree-table">${TREE_HEAD}<tbody>${rows}</tbody></table>`;
 
-    const balances = [...state.contracts].map(c => ({...c, balance: contractBalance(c)})).sort((a,b) => a.balance-b.balance).slice(0,8);
-    document.getElementById('balance-analytics').innerHTML = balances.length ? `<table><thead><tr><th>Договор</th><th>Остаток</th></tr></thead><tbody>${balances.map(c =>
-      `<tr><td><div class="main-cell">№ ${esc(c.number)}</div><div class="sub-cell">${esc(c.counterparty)}</div></td><td class="money" style="color:${c.balance<0?'var(--red)':''}">${money(c.balance)}</td></tr>`
-    ).join('')}</tbody></table>` : '<div class="empty">Нет договоров</div>';
+    const other = state.contracts.filter(c => c.otherExpense);
+    document.getElementById('analytics-other').innerHTML = other.length
+      ? `<table class="tree-table">${TREE_HEAD}<tbody>${other.map(analyticsContractRows).join('')}</tbody></table>`
+      : '<div class="empty">Нет договоров в блоке прочих расходов</div>';
   }
 
   function renderHistory() {
@@ -668,7 +883,9 @@
 
   function rowValues(rowId) {
     const result = {};
-    document.querySelectorAll(`#${rowId} [name]`).forEach(input => result[input.name] = input.value);
+    document.querySelectorAll(`#${rowId} [name]`).forEach(input => {
+      result[input.name] = input.type === 'checkbox' ? input.checked : input.value;
+    });
     return result;
   }
   function startContractRow(id = '') {
@@ -696,9 +913,17 @@
     const values = rowValues('contract-edit-row');
     values.amount = Number(values.amount);
     values.vatRate = Number(values.vatRate);
+    values.otherExpense = values.direction === 'expense' && !!values.otherExpense;
     const before = dataSnapshot();
     const existing = state.contracts.find(c => c.id === editing.id);
-    const entity = {...(existing || {}), ...values, id: existing?.id || uid('contract')};
+    const entity = {...(existing || {status:'active'}), ...values, id: existing?.id || uid('contract')};
+    entity.amountWithoutVat = amountWithoutVat(entity.amount, entity.vatRate);
+    entity.documentCard = entity.documentCard || `КД-${String(entity.number || '').replace('/', '-')}`;
+    entity.date = entity.reviewDate || entity.date;
+    entity.reviewDate = entity.reviewDate || entity.date;
+    entity.registrationDate = entity.registrationDate || entity.date;
+    entity.documentKind = entity.documentKind || 'contract';
+    entity.category = entity.category || 'limit';
     if (existing) state.contracts.splice(state.contracts.indexOf(existing), 1, entity);
     else state.contracts.unshift(entity);
     addHistory(existing ? 'Договор изменен' : 'Договор добавлен', 'contract', `№ ${entity.number} · ${entity.counterparty}`, before);
@@ -711,15 +936,30 @@
     if (!required.every(input => input.reportValidity())) return;
     const values = rowValues('payment-edit-row');
     values.amount = Number(values.amount);
+    values.approvalAmount = Number(values.approvalAmount || values.amount);
+    values.approvalVatRate = Number(values.approvalVatRate || 0);
+    values.approvalAmountWithoutVat = amountWithoutVat(values.approvalAmount, values.approvalVatRate);
+    values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
+    values.paymentDate = values.paymentDate || values.approvalDate;
+    values.approvalDate = values.approvalDate || values.paymentDate;
+    values.date = values.paymentDate;
+    if (values.subtype !== 'specification') values.specificationId = '';
     const contract = contractById(values.contractId);
     const existing = state.payments.find(p => p.id === editing.id);
-    if (contract && values.status === 'paid' && values.type === contract.direction) {
+    const status = existing?.status || 'paid';
+    if (contract && status === 'paid' && values.type === contract.direction) {
       const otherPaid = state.payments.filter(p => p.contractId === contract.id && p.status === 'paid' && p.id !== existing?.id).reduce((s,p) => s + Number(p.amount), 0);
       if (otherPaid + values.amount > Number(contract.amount) &&
           !confirm(`Операция превысит лимит на ${money(otherPaid + values.amount - contract.amount)}. Сохранить?`)) return;
     }
     const before = dataSnapshot();
-    const entity = {...(existing || {}), ...values, id: existing?.id || uid('payment')};
+    const entity = {...(existing || {}), ...values, status, id: existing?.id || uid('payment')};
+    entity.postedDate = entity.postedDate || entity.paymentDate;
+    entity.approvalEndDate = entity.approvalEndDate || entity.approvalDate;
+    entity.costType = entity.costType || entity.bdds;
+    entity.mvz = entity.mvz || entity.cfo;
+    entity.project = entity.project || contract?.project || '';
+    entity.keyCounterparty = entity.keyCounterparty || contract?.counterparty || '';
     if (existing) state.payments.splice(state.payments.indexOf(existing), 1, entity);
     else state.payments.unshift(entity);
     addHistory(existing ? 'Операция изменена' : 'Операция добавлена', 'payment', `${entity.number} · ${money(entity.amount)}`, before);
@@ -732,12 +972,13 @@
     const before = dataSnapshot();
     state.contracts = JSON.parse(JSON.stringify(item.snapshot.contracts || []));
     state.payments = JSON.parse(JSON.stringify(item.snapshot.payments || []));
+    state.specifications = JSON.parse(JSON.stringify(item.snapshot.specifications || []));
     addHistory('Выполнен откат', 'system', `Отменено: ${item.action} — ${item.label}`, before);
     editing = null;
     try { await save('Состояние восстановлено'); } catch { toast('Не удалось выполнить откат'); }
   }
 
-  function renderAll() { renderDashboard(); renderContracts(); renderPayments(); renderAnalytics(); renderHistory(); }
+  function renderAll() { renderContracts(); renderPayments(); renderAnalytics(); renderHistory(); }
 
   function openModal(title, body, context) {
     formContext = context;
@@ -759,7 +1000,7 @@
       <div class="field"><label>Направление</label><select name="direction"><option value="income" ${c.direction==='income'?'selected':''}>Доходный</option><option value="expense" ${c.direction==='expense'?'selected':''}>Расходный</option></select></div>
       <div class="field"><label>Вид договора</label><select name="kind"><option value="fixed" ${c.kind==='fixed'?'selected':''}>Нерамочный</option><option value="framework" ${c.kind==='framework'?'selected':''}>Рамочный</option></select></div>
       <div class="field"><label>Сумма с НДС, ₽ *</label><input name="amount" type="number" min="0" step="0.01" required value="${c.amount || ''}"></div>
-      <div class="field"><label>Ставка НДС, %</label><select name="vatRate">${[0,5,7,10,20].map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v === 0 ? 'Без НДС' : v + '%'}</option>`).join('')}</select></div>
+      <div class="field"><label>Ставка НДС, %</label><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v === 0 ? 'Без НДС' : v + '%'}</option>`).join('')}</select></div>
       <div class="field"><label>Проект</label><input name="project" value="${esc(c.project)}" placeholder="Название проекта"></div>
       <div class="field"><label>Ответственный</label><input name="responsible" value="${esc(c.responsible)}" placeholder="ФИО"></div>
       <div class="field"><label>Дата начала</label><input name="startDate" type="date" value="${esc(c.startDate)}"></div>
@@ -778,7 +1019,7 @@
       <div class="field full"><label>Договор *</label><select name="contractId" required><option value="">Выберите договор</option>${state.contracts.map(c => `<option value="${c.id}" ${p.contractId===c.id?'selected':''}>№ ${esc(c.number)} · ${esc(c.counterparty)}</option>`).join('')}</select></div>
       <div class="field"><label>Операция</label><select name="type"><option value="income" ${p.type==='income'?'selected':''}>Поступление</option><option value="expense" ${p.type==='expense'?'selected':''}>Платеж</option></select></div>
       <div class="field"><label>Сумма, ₽ *</label><input name="amount" type="number" min="0.01" step="0.01" required value="${p.amount || ''}"></div>
-      <div class="field"><label>Вид оплаты</label><select name="paymentKind"><option value="advance" ${p.paymentKind==='advance'?'selected':''}>Аванс</option><option value="postpay" ${p.paymentKind==='postpay'?'selected':''}>Постоплата</option><option value="stage" ${p.paymentKind==='stage'?'selected':''}>Этап</option></select></div>
+      <div class="field"><label>Вид оплаты</label><select name="paymentKind"><option value="advance" ${p.paymentKind==='advance'?'selected':''}>Аванс</option><option value="postpay" ${p.paymentKind==='postpay'?'selected':''}>Постоплата</option><option value="gu" ${p.paymentKind==='gu' || p.paymentKind==='stage'?'selected':''}>ГУ</option></select></div>
       <div class="field"><label>Статус</label><select name="status"><option value="planned" ${p.status==='planned'?'selected':''}>Запланирован</option><option value="paid" ${p.status==='paid'?'selected':''}>Исполнен</option><option value="cancelled" ${p.status==='cancelled'?'selected':''}>Отменен</option></select></div>
       <div class="field full"><label>Комментарий</label><textarea name="comment">${esc(p.comment)}</textarea></div>
     </div>`, {type:'payment', id});
@@ -821,6 +1062,7 @@
     const before = dataSnapshot();
     state.contracts = state.contracts.filter(c => c.id !== id);
     state.payments = state.payments.filter(p => p.contractId !== id);
+    state.specifications = (state.specifications || []).filter(s => s.contractId !== id);
     addHistory('Договор удален', 'contract', `№ ${contract?.number || ''} · ${contract?.counterparty || ''}`, before);
     try { await save('Договор удален'); } catch { toast('Не удалось удалить договор'); }
   }
@@ -838,8 +1080,7 @@
     clearTimeout(el.timer); el.timer = setTimeout(() => el.classList.remove('show'), 2400);
   }
 
-  ['contract-search','contract-direction','contract-status'].forEach(id => document.getElementById(id).addEventListener('input', renderContracts));
-  ['payment-search','payment-type','payment-status'].forEach(id => document.getElementById(id).addEventListener('input', renderPayments));
+  initFilters();
   load();
 </script>
 </body>

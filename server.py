@@ -16,7 +16,7 @@ def read_data():
         with DATA_FILE.open("r", encoding="utf-8") as file:
             return json.load(file)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"contracts": [], "payments": [], "history": []}
+        return {"contracts": [], "payments": [], "specifications": [], "history": []}
 
 
 def write_data(data):
@@ -65,10 +65,12 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ValueError
             contracts = payload.get("contracts")
             payments = payload.get("payments")
+            specifications = payload.get("specifications", [])
             history = payload.get("history", [])
             if (
                 not isinstance(contracts, list)
                 or not isinstance(payments, list)
+                or not isinstance(specifications, list)
                 or not isinstance(history, list)
             ):
                 raise ValueError
@@ -76,6 +78,7 @@ class Handler(SimpleHTTPRequestHandler):
                 {
                     "contracts": contracts,
                     "payments": payments,
+                    "specifications": specifications,
                     "history": history[-50:],
                 }
             )
