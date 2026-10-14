@@ -1,3 +1,4 @@
+import csv
 import hmac
 import json
 import math
@@ -6,7 +7,9 @@ import re
 import secrets
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from io import StringIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -14,7 +17,7 @@ import httpx
 import jwt
 import psycopg
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from jwt import PyJWKClient
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
@@ -1045,6 +1048,402 @@ def list_payments(request: Request):
     with transaction() as conn:
         _, _, payments = fetch_all(conn)
     return payments
+
+
+EXPORT_HEADERS = [
+    "Раздел", "Номер", "Карта документа", "Дата рассмотрения", "Дата регистрации",
+    "Контрагент", "Предмет", "Сумма", "Ставка НДС", "Источник финансирования",
+    "Проект", "Ответственный", "Комментарий", "Вид документа", "Направление",
+    "Вид договора", "Категория", "Дата начала", "Дата окончания", "Прочие расходы",
+    "Статус", "Номер договора", "Дата согласования", "Дата оплаты", "Вид платежа",
+    "Подвид", "БДДС", "ЦФО", "Сумма с НДС", "Сумма оплаты", "Вид оплаты",
+]
+VAT_CHOICES = {Decimal(item) for item in ("0", "5", "7", "10", "20", "22")}
+
+
+class RowProblem(Exception):
+    def __init__(self, line: int, column: str, message: str):
+        self.line = line
+        self.column = column
+        self.message = message
+
+    def text(self) -> str:
+        if self.column:
+            return f"Строка {self.line}, столбец «{self.column}»: {self.message}"
+        return f"Строка {self.line}: {self.message}"
+
+
+def fold(value) -> str:
+    return text(value).strip().lower().replace("ё", "е")
+
+
+def mapped(value, options: dict, line: int, column: str, default: str | None):
+    raw = text(value).strip()
+    if not raw:
+        if default is None:
+            raise RowProblem(line, column, "заполните значение")
+        return default
+    found = options.get(fold(raw))
+    if found is None:
+        raise RowProblem(line, column, f"неизвестное значение «{raw}»")
+    return found
+
+
+def import_date(value, line: int, column: str, required: bool) -> str:
+    raw = text(value).strip()
+    if not raw:
+        if required:
+            raise RowProblem(line, column, "укажите дату")
+        return ""
+    candidate = raw[:10] if re.match(r"\d{4}-\d{2}-\d{2}", raw) else raw
+    for pattern in ("%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y"):
+        try:
+            return datetime.strptime(candidate, pattern).date().isoformat()
+        except ValueError:
+            continue
+    raise RowProblem(line, column, f"дата «{raw}» не разобрана")
+
+
+def import_money(value, line: int, column: str, required: bool) -> Decimal:
+    if text(value).strip() == "":
+        if required:
+            raise RowProblem(line, column, "укажите сумму числом")
+        return Decimal("0.00")
+    number = parse_money(value)
+    if number is None:
+        raise RowProblem(line, column, "укажите сумму числом")
+    return number
+
+
+def import_vat(value, line: int, column: str) -> Decimal:
+    raw = text(value).strip().replace("%", "").replace(" ", "")
+    if not raw:
+        return Decimal("20.00")
+    number = parse_money(raw)
+    if number is None or number not in VAT_CHOICES:
+        raise RowProblem(line, column, "допустимы ставки 0, 5, 7, 10, 20 и 22")
+    return number
+
+
+def import_registry_fields(number, card, responsible, comment, line: int):
+    try:
+        check_registry(number, card, responsible, comment)
+    except HTTPException as exc:
+        detail = text(exc.detail)
+        column = "Комментарий" if "Коммент" in detail else "Ответственный"
+        raise RowProblem(line, column, detail) from exc
+
+
+def csv_table(raw: str):
+    body = raw.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    if not body.strip():
+        raise HTTPException(400, "Файл пустой")
+    first = body.split("\n", 1)[0]
+    delimiter = ";" if first.count(";") >= first.count(",") else ","
+    rows = list(csv.reader(StringIO(body), delimiter=delimiter))
+    while rows and not any(cell.strip() for cell in rows[-1]):
+        rows.pop()
+    if not rows or not any(cell.strip() for cell in rows[0]):
+        raise HTTPException(400, "В файле нет заголовка")
+    headers = [cell.strip() for cell in rows[0]]
+    missing = [name for name in EXPORT_HEADERS if name not in headers]
+    if missing:
+        raise HTTPException(400, "Строка 1: нет столбца «" + "», «".join(missing) + "»")
+    seen = {}
+    for name in headers:
+        if name and name in seen:
+            raise HTTPException(400, f"Строка 1: столбец «{name}» повторяется")
+        if name:
+            seen[name] = True
+    parsed = []
+    for offset, cells in enumerate(rows[1:], start=2):
+        if not any(cell.strip() for cell in cells):
+            continue
+        record = {name: "" for name in EXPORT_HEADERS}
+        for index, name in enumerate(headers):
+            if name in record and index < len(cells):
+                record[name] = cells[index].strip()
+        parsed.append((offset, record))
+    return parsed
+
+
+DOCUMENT_KIND = {"договор": "contract", "счет": "invoice", "без счета, договора": "none", "contract": "contract", "invoice": "invoice", "none": "none"}
+DIRECTION = {"доходный": "income", "расходный": "expense", "income": "income", "expense": "expense"}
+CONTRACT_KIND = {"рамочный": "framework", "нерамочный": "fixed", "framework": "framework", "fixed": "fixed"}
+CATEGORY = {"лимит": "limit", "спецификация": "specification", "заявка": "request", "доп. соглашение": "addendum", "limit": "limit", "specification": "specification", "request": "request", "addendum": "addendum"}
+CONTRACT_STATUS = {"черновик": "draft", "действует": "active", "завершен": "closed", "draft": "draft", "active": "active", "closed": "closed"}
+PAY_TYPE = {"поступление": "income", "оплата": "expense", "платеж": "expense", "доходный": "income", "расходный": "expense", "income": "income", "expense": "expense"}
+PAY_STATUS = {"запланирован": "planned", "исполнен": "paid", "отменен": "cancelled", "planned": "planned", "paid": "paid", "cancelled": "cancelled"}
+PAY_KIND = {"аванс": "advance", "постоплата": "postpay", "гу": "gu", "advance": "advance", "postpay": "postpay", "gu": "gu"}
+SUBTYPE = {"спецификация": "specification", "заявка": "request", "счет": "invoice", "specification": "specification", "request": "request", "invoice": "invoice"}
+YES_VALUES = {"да", "yes", "true", "1", "on"}
+
+
+def display_choice(code: str, pairs: list[tuple[str, str]]) -> str:
+    for value, label in pairs:
+        if value == code:
+            return label
+    return code or ""
+
+
+def csv_amount(value):
+    if value in (None, ""):
+        return ""
+    number = parse_money(value)
+    return "" if number is None else format(number, "f")
+
+
+def export_csv(contracts: list, payments: list) -> str:
+    buffer = StringIO()
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+    writer.writerow(EXPORT_HEADERS)
+    for contract in contracts:
+        writer.writerow([
+            "Договор", contract["number"], contract["documentCard"], contract["reviewDate"] or contract["date"],
+            contract["registrationDate"], contract["counterparty"], contract["subject"], csv_amount(contract["amount"]),
+            csv_amount(contract["vatRate"]), contract["fundingSource"], contract["project"], contract["responsible"],
+            contract["comment"], display_choice(contract["documentKind"], [("contract", "Договор"), ("invoice", "Счёт"), ("none", "Без счета, договора")]),
+            display_choice(contract["direction"], [("income", "Доходный"), ("expense", "Расходный")]),
+            display_choice(contract["kind"], [("framework", "Рамочный"), ("fixed", "Нерамочный")]),
+            display_choice(contract["category"], [("limit", "Лимит"), ("specification", "Спецификация"), ("request", "Заявка"), ("addendum", "Доп. соглашение")]),
+            contract["startDate"], contract["endDate"], "да" if contract["otherExpense"] else "",
+            display_choice(contract["status"], [("draft", "Черновик"), ("active", "Действует"), ("closed", "Завершен")]),
+            "", "", "", "", "", "", "", "", "", "",
+        ])
+    by_id = {contract["id"]: contract for contract in contracts}
+    for payment in payments:
+        parent = by_id.get(payment["contractId"]) or {}
+        writer.writerow([
+            "Платеж", payment["number"], payment["documentCard"], "", "",
+            parent.get("counterparty") or payment.get("keyCounterparty") or "", "", "",
+            csv_amount(payment["approvalVatRate"]), "", payment.get("project") or "", payment["responsible"],
+            payment["comment"], display_choice(payment["documentKind"], [("contract", "Договор"), ("invoice", "Счёт"), ("none", "Без счета, договора")]),
+            "", "", "", "", "", "",
+            display_choice(payment["status"], [("planned", "Запланирован"), ("paid", "Исполнен"), ("cancelled", "Отменен")]),
+            parent.get("number") or "", payment["approvalDate"], payment["paymentDate"] or payment["date"],
+            display_choice(payment["type"], [("income", "Поступление"), ("expense", "Оплата")]),
+            display_choice(payment["subtype"], [("specification", "Спецификация"), ("request", "Заявка"), ("invoice", "Счёт")]),
+            payment["bdds"], payment["cfo"], csv_amount(payment["approvalAmount"]), csv_amount(payment["amount"]),
+            display_choice(payment["paymentKind"], [("advance", "Аванс"), ("postpay", "Постоплата"), ("gu", "ГУ"), ("stage", "ГУ")]),
+        ])
+    return "\ufeff" + buffer.getvalue()
+
+
+def contract_from_import(record: dict, line: int) -> dict:
+    number = record["Номер"].strip()
+    if not number:
+        raise RowProblem(line, "Номер", "укажите номер")
+    card = record["Карта документа"].strip()
+    responsible = record["Ответственный"].strip()
+    comment = record["Комментарий"].strip()
+    import_registry_fields(number, card, responsible, comment, line)
+    document_kind = mapped(record["Вид документа"], DOCUMENT_KIND, line, "Вид документа", "contract")
+    direction = mapped(record["Направление"], DIRECTION, line, "Направление", "" if document_kind in ("invoice", "none") else "expense")
+    kind = mapped(record["Вид договора"], CONTRACT_KIND, line, "Вид договора", "" if document_kind in ("invoice", "none") else "fixed")
+    category = mapped(record["Категория"], CATEGORY, line, "Категория", "limit")
+    if document_kind in ("invoice", "none"):
+        direction, kind, category = "", "", "limit"
+    elif kind == "fixed" and category in ("specification", "request"):
+        category = "limit"
+    amount = import_money(record["Сумма"], line, "Сумма", True)
+    rate = import_vat(record["Ставка НДС"], line, "Ставка НДС")
+    review = import_date(record["Дата рассмотрения"], line, "Дата рассмотрения", True)
+    start_date = import_date(record["Дата начала"], line, "Дата начала", False)
+    end_date = import_date(record["Дата окончания"], line, "Дата окончания", False)
+    if document_kind in ("invoice", "none"):
+        start_date, end_date = "", ""
+    other_raw = record["Прочие расходы"].strip()
+    if other_raw and fold(other_raw) not in YES_VALUES | {"нет", "no", "false", "0"}:
+        raise RowProblem(line, "Прочие расходы", "укажите «да» или оставьте пустым")
+    counterparty = record["Контрагент"].strip()
+    subject = record["Предмет"].strip()
+    if document_kind == "contract" and not counterparty:
+        raise RowProblem(line, "Контрагент", "укажите контрагента")
+    if document_kind == "contract" and not subject:
+        raise RowProblem(line, "Предмет", "укажите предмет")
+    return {
+        "id": "contract-" + secrets.token_hex(8),
+        "number": number,
+        "date": review,
+        "counterparty": counterparty,
+        "subject": subject,
+        "direction": direction,
+        "kind": kind,
+        "amount": amount,
+        "vatRate": rate,
+        "project": record["Проект"].strip(),
+        "responsible": responsible,
+        "startDate": start_date,
+        "endDate": end_date,
+        "status": mapped(record["Статус"], CONTRACT_STATUS, line, "Статус", "active"),
+        "comment": comment,
+        "reviewDate": review,
+        "registrationDate": import_date(record["Дата регистрации"], line, "Дата регистрации", False) or review,
+        "documentCard": card,
+        "fundingSource": record["Источник финансирования"].strip(),
+        "amountWithoutVat": without_vat(amount, rate),
+        "documentKind": document_kind,
+        "category": category,
+        "otherExpense": direction == "expense" and fold(other_raw) in YES_VALUES,
+        "version": 1,
+    }
+
+
+def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> dict:
+    number = record["Номер"].strip()
+    if not number:
+        raise RowProblem(line, "Номер", "укажите номер")
+    contract_number = record["Номер договора"].strip()
+    if not contract_number:
+        raise RowProblem(line, "Номер договора", "укажите номер договора")
+    found = contracts_by_number.get(contract_number)
+    if found is None:
+        raise RowProblem(line, "Номер договора", f"договор «{contract_number}» не найден")
+    if found == "":
+        raise RowProblem(line, "Номер договора", f"в реестре несколько договоров «{contract_number}»")
+    card = record["Карта документа"].strip()
+    responsible = record["Ответственный"].strip()
+    comment = record["Комментарий"].strip()
+    import_registry_fields(number, card, responsible, comment, line)
+    amount = import_money(record["Сумма оплаты"], line, "Сумма оплаты", True)
+    approval = import_money(record["Сумма с НДС"], line, "Сумма с НДС", False)
+    if text(record["Сумма с НДС"]).strip() == "":
+        approval = amount
+    rate = import_vat(record["Ставка НДС"], line, "Ставка НДС")
+    payment_date = import_date(record["Дата оплаты"], line, "Дата оплаты", True)
+    approval_date = import_date(record["Дата согласования"], line, "Дата согласования", False) or payment_date
+    subtype = mapped(record["Подвид"], SUBTYPE, line, "Подвид", "invoice")
+    net = without_vat(approval, rate)
+    parent = found
+    return {
+        "id": "payment-" + secrets.token_hex(8),
+        "contractId": parent["id"],
+        "number": number,
+        "date": payment_date,
+        "amount": amount,
+        "type": mapped(record["Вид платежа"], PAY_TYPE, line, "Вид платежа", "expense"),
+        "paymentKind": mapped(record["Вид оплаты"], PAY_KIND, line, "Вид оплаты", "postpay"),
+        "status": mapped(record["Статус"], PAY_STATUS, line, "Статус", "paid"),
+        "comment": comment,
+        "approvalDate": approval_date,
+        "paymentDate": payment_date,
+        "documentCard": card,
+        "responsible": responsible,
+        "cfo": record["ЦФО"].strip(),
+        "bdds": record["БДДС"].strip(),
+        "approvalAmount": approval,
+        "approvalVatRate": rate,
+        "specificationId": "",
+        "approvalAmountWithoutVat": net,
+        "approvalVatAmount": (approval - net).quantize(MONEY, rounding=ROUND_HALF_UP),
+        "documentKind": mapped(record["Вид документа"], DOCUMENT_KIND, line, "Вид документа", "contract"),
+        "subtype": subtype,
+        "approvalEndDate": approval_date,
+        "postedDate": payment_date,
+        "costType": record["БДДС"].strip(),
+        "mvz": record["ЦФО"].strip(),
+        "keyCounterparty": parent.get("counterparty") or "",
+        "project": record["Проект"].strip() or parent.get("project") or "",
+        "version": 1,
+    }
+
+
+def index_contracts(contracts: list) -> dict:
+    found = {}
+    for contract in contracts:
+        number = text(contract["number"]).strip()
+        if not number:
+            continue
+        found[number] = "" if number in found else contract
+    return found
+
+
+@app.get("/api/export")
+def export_registry(request: Request):
+    guard(request, ALL_GROUPS)
+    with transaction() as conn:
+        contracts, _, payments = fetch_all(conn)
+    content = export_csv(contracts, payments).encode("utf-8")
+    return Response(content, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=registry.csv"})
+
+
+@app.post("/api/import")
+def import_registry(request: Request, payload: dict = Body()):
+    actor = guard(request, EDIT_GROUPS)
+    rows = csv_table(text(payload.get("text")))
+    if not rows:
+        return {"addedContracts": 0, "addedPayments": 0, "duplicates": [], "errors": ["В файле нет строк для загрузки"]}
+    duplicates = []
+    errors = []
+    accepted_contracts = []
+    accepted_payments = []
+    with transaction() as conn:
+        stored_contracts = [contract_from_row(row) for row in conn.execute("SELECT * FROM contracts")]
+        stored_payments = conn.execute("SELECT contract_id, number FROM payments").fetchall()
+        contracts_by_number = index_contracts(stored_contracts)
+        payment_keys = {(row["contract_id"], text(row["number"]).strip()) for row in stored_payments}
+        contract_lines = {}
+        payment_lines = {}
+        contract_rows = []
+        payment_rows = []
+        for line, record in rows:
+            section = fold(record["Раздел"])
+            if section == "договор":
+                contract_rows.append((line, record))
+            elif section == "платеж":
+                payment_rows.append((line, record))
+            else:
+                errors.append(RowProblem(line, "Раздел", "укажите «Договор» или «Платеж»").text())
+        for line, record in contract_rows:
+            try:
+                entity = contract_from_import(record, line)
+            except RowProblem as problem:
+                errors.append(problem.text())
+                continue
+            number = entity["number"]
+            if number in contract_lines:
+                duplicates.append(f"Строка {line}: дубль договора № {number}. Первая строка файла — {contract_lines[number]}.")
+                continue
+            if number in contracts_by_number:
+                duplicates.append(f"Строка {line}: дубль договора № {number}. Такая запись уже есть в реестре.")
+                continue
+            contract_lines[number] = line
+            contracts_by_number[number] = entity
+            accepted_contracts.append(entity)
+        for line, record in payment_rows:
+            try:
+                entity = payment_from_import(record, line, contracts_by_number)
+            except RowProblem as problem:
+                errors.append(problem.text())
+                continue
+            key = (entity["contractId"], entity["number"])
+            marker = f"{entity['contractId']}|{entity['number']}"
+            if marker in payment_lines:
+                duplicates.append(f"Строка {line}: дубль платежа № {entity['number']}. Первая строка файла — {payment_lines[marker]}.")
+                continue
+            if key in payment_keys:
+                duplicates.append(f"Строка {line}: дубль платежа № {entity['number']} по этому договору. Такая запись уже есть в реестре.")
+                continue
+            payment_lines[marker] = line
+            payment_keys.add(key)
+            accepted_payments.append(entity)
+        def line_number(message: str) -> int:
+            found = re.search(r"Строка (\d+)", message)
+            return int(found.group(1)) if found else 0
+        duplicates.sort(key=line_number)
+        errors.sort(key=line_number)
+        for entity in accepted_contracts:
+            saved = apply_saved(conn, "contract", entity, 1)
+            audit(conn, actor["username"], "Договор добавлен", "contract", saved["id"], f"№ {saved['number']} · {saved['counterparty']}", None, saved)
+        for entity in accepted_payments:
+            saved = apply_saved(conn, "payment", entity, 1)
+            audit(conn, actor["username"], "Операция добавлена", "payment", saved["id"], f"{saved['number']} · {saved['amount']}", None, saved)
+    return {
+        "addedContracts": len(accepted_contracts),
+        "addedPayments": len(accepted_payments),
+        "duplicates": duplicates,
+        "errors": errors,
+    }
 
 
 @app.get("/api/audit")

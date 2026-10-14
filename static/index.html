@@ -84,6 +84,12 @@
     }
     .page-head h2 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.4px; }
     .page-head p { margin: 0; color: var(--muted); }
+    .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    #import-report { margin-bottom: 16px; }
+    .import-report h3, .import-report h4 { margin: 0 0 8px; }
+    .import-report h4 { margin-top: 14px; }
+    .import-report ul { margin: 0; padding-left: 18px; }
+    .import-report li { margin: 4px 0; }
     .btn {
       border: 1px solid var(--line); border-radius: 9px; padding: 9px 14px;
       color: var(--ink); background: white; font-weight: 600; transition: .15s ease;
@@ -352,6 +358,7 @@
           <select class="filter filter-field" id="contract-filter-field" onchange="syncFilterValue('contract')"></select>
           <span id="contract-filter-value"></span>
           <button type="button" class="btn" onclick="addStructuredFilter('contract')">+ фильтр</button>
+          <button type="button" class="btn" onclick="clearFilters('contract')">Сбросить фильтры</button>
           <div class="search-chips" id="contract-filter-chips"></div>
         </div>
         <div class="panel"><div class="table-wrap" id="contracts-table"></div></div>
@@ -366,6 +373,7 @@
           <select class="filter filter-field" id="payment-filter-field" onchange="syncFilterValue('payment')"></select>
           <span id="payment-filter-value"></span>
           <button type="button" class="btn" onclick="addStructuredFilter('payment')">+ фильтр</button>
+          <button type="button" class="btn" onclick="clearFilters('payment')">Сбросить фильтры</button>
           <div class="search-chips" id="payment-filter-chips"></div>
         </div>
         <div class="panel"><div class="table-wrap" id="payments-table"></div></div>
@@ -387,6 +395,15 @@
       </section>
 
       <section class="page" id="page-history">
+        <div class="page-head">
+          <div><h2>История изменений</h2><p>Журнал, выгрузка и загрузка договоров и платежей</p></div>
+          <div class="page-actions">
+            <button type="button" class="btn" onclick="exportRegistry()">Экспорт</button>
+            <button type="button" class="btn primary" data-requires="edit" onclick="document.getElementById('import-file').click()">Импорт</button>
+            <input id="import-file" type="file" accept=".csv,text/csv" hidden onchange="importRegistry(this)">
+          </div>
+        </div>
+        <div class="panel import-report" id="import-report" hidden></div>
         <div class="panel history-panel"><div id="history-table"></div></div>
       </section>
     </div>
@@ -565,6 +582,11 @@
     document.getElementById(`${kind}-filter-chips`).innerHTML = activeFilters[kind].map((filter, index) =>
       `<span class="search-chip">${esc(filter.title)}<button type="button" onclick="removeStructuredFilter('${kind}',${index})">×</button></span>`
     ).join('');
+  }
+  function clearFilters(kind) {
+    activeFilters[kind] = [];
+    renderFilterChips(kind);
+    kind === 'contract' ? renderContracts() : renderPayments();
   }
   function addStructuredFilter(kind) {
     if (activeFilters[kind].length >= 10) { toast('Не больше 10 фильтров'); return; }
@@ -1020,6 +1042,78 @@
       : '<div class="empty">Нет договоров в блоке прочих расходов</div>';
   }
 
+  function renderImportReport(report) {
+    const box = document.getElementById('import-report');
+    const duplicates = report.duplicates || [];
+    const errors = report.errors || [];
+    const lists = [
+      duplicates.length ? `<h4>Дубли, не загружены</h4><ul>${duplicates.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '',
+      errors.length ? `<h4>Ошибки в данных</h4><ul>${errors.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : ''
+    ].join('');
+    box.hidden = false;
+    box.innerHTML = `<div class="panel-body"><h3>Результат импорта</h3><p>Добавлено договоров: ${report.addedContracts}. Платежей: ${report.addedPayments}.</p>${lists || '<p>Все строки загружены.</p>'}</div>`;
+  }
+  async function exportRegistry() {
+    const response = await fetch('/api/export', {credentials: 'same-origin'});
+    if (response.status === 401) { location.href = '/login'; return; }
+    if (!response.ok) { toast('Не удалось выгрузить реестр'); return; }
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'registry.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+  async function importRegistry(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      const report = await api('/api/import', {method: 'POST', body: JSON.stringify({text: await file.text()})});
+      renderImportReport(report);
+      await load();
+      const skipped = (report.duplicates || []).length + (report.errors || []).length;
+      toast(skipped ? `Загружено не всё: пропущено ${skipped}` : 'Импорт выполнен');
+    } catch (error) {
+      if (!quiet(error)) toast('Не удалось импортировать файл');
+    }
+  }
+  function renderImportReport(report) {
+    const box = document.getElementById('import-report');
+    const duplicates = report.duplicates || [];
+    const errors = report.errors || [];
+    const lists = [
+      duplicates.length ? `<h4>Дубли, не загружены</h4><ul>${duplicates.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '',
+      errors.length ? `<h4>Ошибки в данных</h4><ul>${errors.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : ''
+    ].join('');
+    box.hidden = false;
+    box.innerHTML = `<div class="panel-body"><h3>Результат импорта</h3><p>Добавлено договоров: ${report.addedContracts}. Платежей: ${report.addedPayments}.</p>${lists || '<p>Все строки загружены.</p>'}</div>`;
+  }
+  async function exportRegistry() {
+    const response = await fetch('/api/export', {credentials: 'same-origin'});
+    if (response.status === 401) { location.href = '/login'; return; }
+    if (!response.ok) { toast('Не удалось выгрузить реестр'); return; }
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'registry.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+  async function importRegistry(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      const report = await api('/api/import', {method: 'POST', body: JSON.stringify({text: await file.text()})});
+      renderImportReport(report);
+      await load();
+      const skipped = (report.duplicates || []).length + (report.errors || []).length;
+      toast(skipped ? `Загружено не всё: пропущено ${skipped}` : 'Импорт выполнен');
+    } catch (error) {
+      if (!quiet(error)) toast('Не удалось импортировать файл');
+    }
+  }
   function renderHistory() {
     const history = state.history || [];
     const section = {contract:'Договоры', payment:'Платежи', specification:'Спецификации'};
