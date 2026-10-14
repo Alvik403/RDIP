@@ -1,11 +1,12 @@
 import hmac
 import json
+import math
 import os
 import re
 import secrets
 import time
 from contextlib import contextmanager
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -161,7 +162,50 @@ def transaction():
 
 
 def money(value) -> Decimal:
-    return Decimal(str(value if value not in (None, "") else 0)).quantize(MONEY, rounding=ROUND_HALF_UP)
+    number = parse_money(value)
+    if number is None:
+        raise HTTPException(400, "Укажите сумму числом")
+    return number
+
+
+def parse_money(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, Decimal):
+        raw = value
+    elif isinstance(value, int):
+        raw = Decimal(value)
+    elif isinstance(value, float):
+        raw = Decimal(str(value))
+    else:
+        cleaned = str(value or "").strip().replace("\u00a0", " ").replace("\u202f", " ")
+        for mark in ("₽", "руб.", "руб"):
+            cleaned = cleaned.replace(mark, "")
+        cleaned = cleaned.replace(" ", "")
+        if not cleaned:
+            return Decimal(0).quantize(MONEY)
+        if cleaned.lower() in {"nan", "+nan", "-nan", "inf", "+inf", "-inf", "infinity", "+infinity", "-infinity", "snan"}:
+            return None
+        last_comma, last_dot = cleaned.rfind(","), cleaned.rfind(".")
+        if last_comma >= 0 and last_dot >= 0:
+            if last_comma > last_dot:
+                cleaned = cleaned.replace(".", "").replace(",", ".")
+            else:
+                cleaned = cleaned.replace(",", "")
+        elif last_comma >= 0:
+            cleaned = cleaned.replace(",", ".")
+        try:
+            raw = Decimal(cleaned)
+        except InvalidOperation:
+            return None
+    if not raw.is_finite():
+        return None
+    try:
+        return raw.quantize(MONEY, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        return None
 
 
 def text(value) -> str:
@@ -1175,4 +1219,4 @@ def rollback(request: Request, audit_id: int):
 
 @app.get("/")
 def index_page():
-    return FileResponse(ROOT / "static" / "index.html")
+    return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})

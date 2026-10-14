@@ -469,6 +469,17 @@
     return true;
   }
   function money(value) { return rub.format(Number(value) || 0); }
+  function parseAmount(value) {
+    let raw = String(value ?? '').replace(/[\s\u00a0\u202f]/g, '').replace(/₽/g, '').replace(/руб\.?/gi, '');
+    if (!raw) return null;
+    const lastComma = raw.lastIndexOf(',');
+    const lastDot = raw.lastIndexOf('.');
+    if (lastComma >= 0 && lastDot >= 0) {
+      raw = lastComma > lastDot ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, '');
+    } else if (lastComma >= 0) raw = raw.replace(',', '.');
+    const number = Number(raw);
+    return Number.isFinite(number) ? Math.round(number * 100) / 100 : null;
+  }
   function showDate(value) { return value ? dateFmt.format(new Date(value + 'T00:00:00')) : '—'; }
   function uid(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
   function contractById(id) { return state.contracts.find(c => c.id === id); }
@@ -812,7 +823,7 @@
       <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
       <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент"></td>
       <td><input name="subject" required value="${esc(c.subject)}" placeholder="Предмет"></td>
-      <td><input name="amount" type="number" min="0" step="0.01" required value="${c.amount || ''}" placeholder="0"></td>
+      <td><input name="amount" inputmode="decimal" required value="${c.amount ?? ''}" placeholder="0"></td>
       <td><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v ? v + '%' : '—'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
       <td><input name="fundingSource" value="${esc(c.fundingSource)}" placeholder="Источник"></td>
@@ -891,10 +902,10 @@
         <select name="specificationId"><option value="">—</option>${specs.map(s => `<option value="${s.id}" ${p.specificationId===s.id?'selected':''}>${esc(s.number)}</option>`).join('')}</select></td>
       <td><input name="bdds" value="${esc(p.bdds)}" placeholder="БДДС"></td>
       <td><input name="cfo" value="${esc(p.cfo)}" placeholder="ЦФО"></td>
-      <td><input name="approvalAmount" type="number" min="0" step="0.01" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма"></td>
+      <td><input name="approvalAmount" inputmode="decimal" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма"></td>
       <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? 20)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
-      <td><input name="amount" type="number" min="0.01" step="0.01" required value="${p.amount || ''}" placeholder="Оплата"></td>
+      <td><input name="amount" inputmode="decimal" required value="${p.amount ?? ''}" placeholder="Оплата"></td>
       <td><select name="paymentKind">${optionTags([['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']], kind)}</select></td>
       <td><input name="responsible" value="${esc(p.responsible)}" placeholder="ФИО"></td>
       <td><input name="comment" value="${esc(p.comment)}" placeholder="Комментарий"></td>
@@ -1052,13 +1063,19 @@
     editing = null;
     type === 'contract' ? renderContracts() : renderPayments();
   }
+  let rowSaving = false;
   async function saveContractRow() {
+    if (rowSaving) return;
+    rowSaving = true;
+    try {
     const row = document.getElementById('contract-edit-row');
     const required = [...row.querySelectorAll('[required]')];
     if (!required.every(input => input.reportValidity())) return;
     const values = rowValues('contract-edit-row');
     if (!validateRegistryFields(values)) return;
-    values.amount = Number(values.amount);
+    const amount = parseAmount(values.amount);
+    if (amount == null) return rejectRow('Укажите сумму числом');
+    values.amount = amount;
     values.vatRate = Number(values.vatRate);
     if (values.documentKind === 'invoice' || values.documentKind === 'none') {
       values.direction = '';
@@ -1081,15 +1098,22 @@
     entity.category = entity.category || 'limit';
     try { await persistRow('/api/contracts', entity, existing, 'Изменения сохранены'); }
     catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
+    } finally { rowSaving = false; }
   }
   async function savePaymentRow() {
+    if (rowSaving) return;
+    rowSaving = true;
+    try {
     const row = document.getElementById('payment-edit-row');
     const required = [...row.querySelectorAll('[required]')];
     if (!required.every(input => input.reportValidity())) return;
     const values = rowValues('payment-edit-row');
     if (!validateRegistryFields(values)) return;
-    values.amount = Number(values.amount);
-    values.approvalAmount = Number(values.approvalAmount || values.amount);
+    const amount = parseAmount(values.amount);
+    const approval = parseAmount(values.approvalAmount);
+    if (amount == null || (String(values.approvalAmount || '').trim() && approval == null)) return rejectRow('Укажите сумму числом');
+    values.amount = amount;
+    values.approvalAmount = approval == null ? amount : approval;
     values.approvalVatRate = Number(values.approvalVatRate || 0);
     values.approvalAmountWithoutVat = amountWithoutVat(values.approvalAmount, values.approvalVatRate);
     values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
@@ -1114,6 +1138,7 @@
     entity.keyCounterparty = entity.keyCounterparty || contract?.counterparty || '';
     try { await persistRow('/api/payments', entity, existing, 'Изменения сохранены'); }
     catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
+    } finally { rowSaving = false; }
   }
   async function rollbackHistory(id) {
     const item = state.history.find(entry => String(entry.id) === String(id));
@@ -1148,7 +1173,7 @@
       <div class="field full"><label>Предмет договора *</label><input name="subject" required value="${esc(c.subject)}" placeholder="Краткое описание"></div>
       <div class="field"><label>Направление</label><select name="direction"><option value="income" ${c.direction==='income'?'selected':''}>Доходный</option><option value="expense" ${c.direction==='expense'?'selected':''}>Расходный</option></select></div>
       <div class="field"><label>Вид договора</label><select name="kind"><option value="fixed" ${c.kind==='fixed'?'selected':''}>Нерамочный</option><option value="framework" ${c.kind==='framework'?'selected':''}>Рамочный</option></select></div>
-      <div class="field"><label>Сумма с НДС, ₽ *</label><input name="amount" type="number" min="0" step="0.01" required value="${c.amount || ''}"></div>
+      <div class="field"><label>Сумма с НДС, ₽ *</label><input name="amount" inputmode="decimal" required value="${c.amount ?? ''}"></div>
       <div class="field"><label>Ставка НДС, %</label><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v === 0 ? 'Без НДС' : v + '%'}</option>`).join('')}</select></div>
       <div class="field"><label>Проект</label><input name="project" value="${esc(c.project)}" placeholder="Название проекта"></div>
       <div class="field"><label>Ответственный</label><input name="responsible" value="${esc(c.responsible)}" placeholder="ФИО"></div>
@@ -1167,7 +1192,7 @@
       <div class="field"><label>Дата *</label><input name="date" type="date" required value="${esc(p.date)}"></div>
       <div class="field full"><label>Договор *</label><select name="contractId" required><option value="">Выберите договор</option>${state.contracts.map(c => `<option value="${c.id}" ${p.contractId===c.id?'selected':''}>№ ${esc(c.number)} · ${esc(c.counterparty)}</option>`).join('')}</select></div>
       <div class="field"><label>Операция</label><select name="type"><option value="income" ${p.type==='income'?'selected':''}>Поступление</option><option value="expense" ${p.type==='expense'?'selected':''}>Платеж</option></select></div>
-      <div class="field"><label>Сумма, ₽ *</label><input name="amount" type="number" min="0.01" step="0.01" required value="${p.amount || ''}"></div>
+      <div class="field"><label>Сумма, ₽ *</label><input name="amount" inputmode="decimal" required value="${p.amount ?? ''}"></div>
       <div class="field"><label>Вид оплаты</label><select name="paymentKind"><option value="advance" ${p.paymentKind==='advance'?'selected':''}>Аванс</option><option value="postpay" ${p.paymentKind==='postpay'?'selected':''}>Постоплата</option><option value="gu" ${p.paymentKind==='gu' || p.paymentKind==='stage'?'selected':''}>ГУ</option></select></div>
       <div class="field"><label>Статус</label><select name="status"><option value="planned" ${p.status==='planned'?'selected':''}>Запланирован</option><option value="paid" ${p.status==='paid'?'selected':''}>Исполнен</option><option value="cancelled" ${p.status==='cancelled'?'selected':''}>Отменен</option></select></div>
       <div class="field full"><label>Комментарий</label><textarea name="comment">${esc(p.comment)}</textarea></div>
@@ -1179,7 +1204,9 @@
     const values = Object.fromEntries(new FormData(e.target));
     try {
       if (formContext.type === 'contract') {
-        values.amount = Number(values.amount); values.vatRate = Number(values.vatRate);
+        const amount = parseAmount(values.amount);
+        if (amount == null) { toast('Укажите сумму числом'); return; }
+        values.amount = amount; values.vatRate = Number(values.vatRate);
         if (values.endDate && values.startDate && values.endDate < values.startDate) {
           toast('Дата окончания раньше даты начала'); return;
         }
@@ -1187,7 +1214,9 @@
         const entity = {...(existing || {}), ...values, id: existing?.id || uid('contract')};
         await persistRow('/api/contracts', entity, existing, 'Изменения сохранены');
       } else {
-        values.amount = Number(values.amount);
+        const amount = parseAmount(values.amount);
+        if (amount == null) { toast('Укажите сумму числом'); return; }
+        values.amount = amount;
         const contract = contractById(values.contractId);
         if (contract && values.status === 'paid') {
           const otherPaid = state.payments.filter(x => x.contractId === contract.id && x.status === 'paid' && x.id !== formContext.id).reduce((s,x) => s + Number(x.amount), 0);
