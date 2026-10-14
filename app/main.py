@@ -24,7 +24,6 @@ OIDC_INTERNAL = os.environ.get("OIDC_INTERNAL", "http://keycloak:8080/auth/realm
 REDIRECT_URI = PUBLIC_BASE + "/oauth/callback"
 CLIENT_ID = "dip-web"
 MONEY = Decimal("0.01")
-DIGITS = re.compile(r"^\d+$")
 LATIN = re.compile(r"[A-Za-z]")
 
 VIEWERS, EDITORS, AUDITORS, ADMINS = "DiP-Viewers", "DiP-Editors", "DiP-Auditors", "DiP-Admins"
@@ -211,10 +210,6 @@ def same_token(left: str, right: str) -> bool:
 
 
 def check_registry(number, card, responsible, comment):
-    if not DIGITS.fullmatch(text(number).strip()):
-        raise HTTPException(400, "В столбец номер можно ввести только цифры")
-    if text(card).strip() and not DIGITS.fullmatch(text(card).strip()):
-        raise HTTPException(400, "В столбец карта можно ввести только цифры")
     if responsible and re.search(r"\d", text(responsible)):
         raise HTTPException(400, "В ФИО не может быть цифр")
     if responsible and LATIN.search(text(responsible)):

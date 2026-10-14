@@ -461,11 +461,8 @@
     const text = value == null || value === '' ? '—' : String(value);
     return `<span title="${esc(text)}">${esc(text)}</span>`;
   }
-  function digitsOnly(value) { return /^\d+$/.test(String(value || '').trim()); }
   function rejectRow(message) { toast(message); return false; }
   function validateRegistryFields(values) {
-    if (!digitsOnly(values.number)) return rejectRow('В столбец номер можно ввести только цифры');
-    if (String(values.documentCard || '').trim() && !digitsOnly(values.documentCard)) return rejectRow('В столбец карта можно ввести только цифры');
     if (values.responsible && /\d/.test(values.responsible)) return rejectRow('В ФИО не может быть цифр');
     if (values.responsible && /[A-Za-z]/.test(values.responsible)) return rejectRow('Ввод данных в столбце Ответств. только на русском языке');
     if (values.comment && /[A-Za-z]/.test(values.comment)) return rejectRow('Ввод данных в столбце Коммент. только на русском языке');
