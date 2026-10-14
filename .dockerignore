@@ -1,5 +1,10 @@
+.git
+.gitignore
+secrets
 __pycache__
 *.pyc
-.git
 .cursor
-README.md
+concept.txt
+remarks.txt
+remarks_utf8.txt
+tools

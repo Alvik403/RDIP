@@ -1,0 +1,87 @@
+{
+  "realm": "dip",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "loginTheme": "dip",
+  "internationalizationEnabled": true,
+  "supportedLocales": ["ru"],
+  "defaultLocale": "ru",
+  "requiredActions": [
+    {"alias": "VERIFY_PROFILE", "name": "Verify Profile", "providerId": "VERIFY_PROFILE", "enabled": false, "defaultAction": false, "priority": 10}
+  ],
+  "groups": [
+    {"name": "DiP-Viewers"},
+    {"name": "DiP-Editors"},
+    {"name": "DiP-Auditors"},
+    {"name": "DiP-Admins"}
+  ],
+  "clients": [
+    {
+      "clientId": "dip-web",
+      "name": "DiP web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "__CLIENT_SECRET__",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "https://localhost/oauth/callback",
+        "https://127.0.0.1/oauth/callback"
+      ],
+      "webOrigins": ["https://localhost", "https://127.0.0.1"],
+      "attributes": {
+        "post.logout.redirect.uris": "https://localhost/login##https://127.0.0.1/login"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{"type": "password", "value": "viewer", "temporary": false}],
+      "groups": ["/DiP-Viewers"]
+    },
+    {
+      "username": "editor",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{"type": "password", "value": "editor", "temporary": false}],
+      "groups": ["/DiP-Editors"]
+    },
+    {
+      "username": "auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{"type": "password", "value": "auditor", "temporary": false}],
+      "groups": ["/DiP-Auditors"]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{"type": "password", "value": "admin", "temporary": false}],
+      "groups": ["/DiP-Admins"]
+    }
+  ]
+}
