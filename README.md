@@ -21,15 +21,23 @@
 
 Нужны Docker и Docker Compose. Порт 443 должен быть свободен. Каталог `secrets/` в git не входит.
 
+Контейнеры не запускаются от root. Файл секрета принадлежит uid процесса внутри контейнера и доступен только ему: Keycloak — `1000`, приложение — `10001`. Каталог `secrets` остаётся доступен только root.
+
 ```bash
 install -d -m 700 secrets
 umask 077
-openssl rand -base64 48 | tr -dc A-Za-z0-9 | head -c 32 > secrets/postgres_password
-openssl rand -base64 48 | tr -dc A-Za-z0-9 | head -c 24 > secrets/kc_admin_password
-openssl rand -base64 48 | tr -dc A-Za-z0-9 | head -c 32 > secrets/kc_client_secret
-openssl rand -base64 64 | tr -dc A-Za-z0-9 | head -c 48 > secrets/session_secret
+openssl rand -hex 16 > secrets/postgres_password
+openssl rand -hex 12 > secrets/kc_admin_password
+openssl rand -hex 16 > secrets/kc_client_secret
+openssl rand -hex 24 > secrets/session_secret
+chown 1000:1000 secrets/kc_admin_password
+chmod 400 secrets/kc_admin_password
+chown 10001:10001 secrets/postgres_password secrets/kc_client_secret secrets/session_secret
+chmod 400 secrets/postgres_password secrets/kc_client_secret secrets/session_secret
 openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
   -keyout secrets/tls.key -out secrets/tls.crt -subj "/CN=localhost"
+chmod 600 secrets/tls.key
+chmod 644 secrets/tls.crt
 docker compose up --build -d
 ```
 

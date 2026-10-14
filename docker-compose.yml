@@ -47,7 +47,11 @@ services:
       - kc-import:/opt/keycloak/data/import:ro
       - kc-data:/opt/keycloak/data
     secrets:
-      - kc_admin_password
+      - source: kc_admin_password
+        target: kc_admin_password
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
     restart: unless-stopped
 
   web:
@@ -62,9 +66,21 @@ services:
       DATABASE_NAME: dip
       DATABASE_USER: dip
     secrets:
-      - postgres_password
-      - kc_client_secret
-      - session_secret
+      - source: postgres_password
+        target: postgres_password
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: kc_client_secret
+        target: kc_client_secret
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: session_secret
+        target: session_secret
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
     read_only: true
     tmpfs:
       - /tmp
