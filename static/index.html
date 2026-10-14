@@ -480,7 +480,15 @@
     const number = Number(raw);
     return Number.isFinite(number) ? Math.round(number * 100) / 100 : null;
   }
-  function showDate(value) { return value ? dateFmt.format(new Date(value + 'T00:00:00')) : '—'; }
+  function showDate(value) {
+    if (value == null || value === '') return '—';
+    const text = String(value).trim();
+    if (!text) return '—';
+    const iso = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    const date = iso ? new Date(iso[1] + 'T00:00:00') : new Date(text);
+    if (Number.isNaN(date.getTime())) return text;
+    return dateFmt.format(date);
+  }
   function uid(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
   function contractById(id) { return state.contracts.find(c => c.id === id); }
   function specsForContract(contractId) {
