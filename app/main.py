@@ -516,8 +516,8 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
     approval = money(payload.get("approvalAmount") if payload.get("approvalAmount") not in (None, "") else amount)
     rate = money(payload.get("approvalVatRate"))
     net = without_vat(approval, rate)
-    payment_date = text(payload.get("paymentDate") or payload.get("date") or payload.get("approvalDate"))
-    approval_date = text(payload.get("approvalDate") or payment_date)
+    payment_date = text(payload.get("paymentDate")).strip() if "paymentDate" in payload else text(payload.get("date")).strip()
+    approval_date = text(payload.get("approvalDate") or payment_date).strip()
     subtype = text(payload.get("subtype"))
     document_kind = text(payload.get("documentKind") or "contract")
     contract_id = text(payload.get("contractId")).strip()
@@ -1539,7 +1539,7 @@ def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> d
     if text(record["Сумма с НДС"]).strip() == "":
         approval = amount
     rate = import_vat(record["Ставка НДС"], line, "Ставка НДС")
-    payment_date = import_date(record["Дата оплаты"], line, "Дата оплаты", True)
+    payment_date = import_date(record["Дата оплаты"], line, "Дата оплаты", False)
     approval_date = import_date(record["Дата согласования"], line, "Дата согласования", False) or payment_date
     subtype = mapped(record["Подвид"], SUBTYPE, line, "Подвид", "invoice")
     net = without_vat(approval, rate)

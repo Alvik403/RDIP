@@ -144,6 +144,10 @@
       position: sticky; top: 0; z-index: 2;
     }
     th.sortable { cursor: pointer; user-select: none; }
+    .table-wrap.can-edit .data-table td[data-field],
+    .table-wrap.can-edit .payment-subtable tr[data-payment-id] td,
+    .table-wrap.can-edit .spec-head[data-spec-id],
+    #dictionaries-grid.can-edit .dict-list li[data-id] span { cursor: cell; }
     th.sortable:hover { color: var(--blue); }
     td { padding: 0 8px; border-right: 1px solid #e0e4ea; border-bottom: 1px solid #e0e4ea; vertical-align: middle; }
     th:last-child, td:last-child { border-right: 0; }
@@ -488,9 +492,10 @@
     const text = value == null || value === '' ? '—' : String(value);
     return `<span title="${esc(text)}">${esc(text)}</span>`;
   }
-  function moneyCell(value, cls = '') {
+  function moneyCell(value, cls = '', field = '') {
     const num = Number(value) || 0;
-    return `<td class="money cell-number ${cls} ${num < 0 ? 'neg' : ''}" title="${esc(money(num))}">${money(num)}</td>`;
+    const attr = field ? ` data-field="${esc(field)}"` : '';
+    return `<td class="money cell-number ${cls} ${num < 0 ? 'neg' : ''}"${attr} title="${esc(money(num))}">${money(num)}</td>`;
   }
   function rejectRow(message) { toast(message); return false; }
   function validateRegistryFields(values) {
@@ -757,35 +762,61 @@
     document.getElementById('top-title').textContent = names[page];
   }
   document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
+  document.addEventListener('dblclick', event => {
+    if (!canEdit()) return;
+    if (event.target.closest('button, a, input, select, textarea, summary, .actions-col, .expand-col')) return;
+    const dict = event.target.closest('#dictionaries-grid li[data-id]');
+    if (dict) {
+      dictEditing = dict.dataset.id;
+      renderDictionaries();
+      document.getElementById(`dict-edit-${dict.dataset.id}`)?.focus();
+      return;
+    }
+    const spec = event.target.closest('.spec-head[data-spec-id]');
+    if (spec) {
+      startContractRow(spec.dataset.specId);
+      return;
+    }
+    const payment = event.target.closest('tr[data-payment-id]');
+    if (payment) {
+      startPaymentRow(payment.dataset.paymentId, event.target.closest('td')?.dataset.field || '');
+      return;
+    }
+    const row = event.target.closest('#contracts-table tr[data-id], #payments-table tr[data-id]');
+    if (!row || row.classList.contains('edit-row')) return;
+    const field = event.target.closest('td')?.dataset.field || '';
+    if (row.closest('#contracts-table')) startContractRow(row.dataset.id, field);
+    else startPaymentRow(row.dataset.id, field);
+  });
 
   /* ---------- раскрытие договора: платежи по дням ---------- */
   function paymentsByDay(payments) {
     if (!payments.length) return '<div class="payment-empty">Операций нет</div>';
     const groups = new Map();
     payments.forEach(p => {
-      const key = String(p.paymentDate || p.date || '').slice(0, 10);
+      const key = String(p.paymentDate || '').slice(0, 10);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(p);
     });
-    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([day, list]) => {
+    return [...groups.entries()].sort((a, b) => (a[0] ? b[0] ? b[0].localeCompare(a[0]) : -1 : 1)).map(([day, list]) => {
       const total = sumAmount(list);
       const paid = sumPaid(list);
       const numbers = list.map(p => p.number).join(', ');
       return `<details class="day-group">
         <summary>
-          <strong>${showDate(day)}</strong>
+          <strong>${day ? showDate(day) : 'Без даты оплаты'}</strong>
           <span title="${esc(numbers)}">${list.length} опер.: ${esc(numbers)}</span>
           <span class="money">${money(total)}</span>
           <span>${paid === total ? '<span class="badge green">Исполнено</span>' : `<span class="badge blue">исп. ${money(paid)}</span>`}</span>
         </summary>
         <table class="payment-subtable"><thead><tr>
           <th style="width:110px">№</th><th style="width:90px">Вид</th><th style="width:130px">Сумма</th><th style="width:110px">Статус</th><th>Комментарий</th><th style="width:40px"></th>
-        </tr></thead><tbody>${list.map(p => `<tr>
-          <td><strong>${esc(p.number)}</strong></td>
-          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Пост.' : 'Спис.'}</span></td>
-          <td class="money cell-number">${money(p.amount)}</td>
+        </tr></thead><tbody>${list.map(p => `<tr data-payment-id="${esc(p.id)}">
+          <td data-field="number"><strong>${esc(p.number)}</strong></td>
+          <td class="cell-center" data-field="type"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Пост.' : 'Спис.'}</span></td>
+          <td class="money cell-number" data-field="amount">${money(p.amount)}</td>
           <td class="cell-center">${statusBadge(p.status)}</td>
-          <td>${esc(p.comment || '—')}</td>
+          <td data-field="comment">${esc(p.comment || '—')}</td>
           <td class="cell-center">${canEdit() ? `<button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button>` : ''}</td>
         </tr>`).join('')}</tbody></table>
       </details>`;
@@ -806,7 +837,7 @@
     const actions = s => canEdit() ? `<span class="spec-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${s.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${s.id}')">⌫</button></span>` : '';
     return `${box}${shown.map(s => {
       const remain = contractPayRemainder(s);
-      return `<div class="spec-block"><div class="spec-head"><span class="spec-title"><strong>${labels[s.category] || 'Спецификация'} ${esc(s.number)}</strong> · ${esc(s.subject)} · лимит ${money(s.amount)} · <span class="${remain < 0 ? 'neg' : ''}">остаток оплат: ${money(remain)}</span></span>${actions(s)}</div>${paymentsByDay(paymentsForContract(s.id))}</div>`;
+      return `<div class="spec-block"><div class="spec-head" data-spec-id="${esc(s.id)}"><span class="spec-title"><strong>${labels[s.category] || 'Спецификация'} ${esc(s.number)}</strong> · ${esc(s.subject)} · лимит ${money(s.amount)} · <span class="${remain < 0 ? 'neg' : ''}">остаток оплат: ${money(remain)}</span></span>${actions(s)}</div>${paymentsByDay(paymentsForContract(s.id))}</div>`;
     }).join('')}<div class="spec-block"><div class="spec-head"><span class="spec-title"><strong>Платежи по договору вне спецификаций</strong></span></div>${paymentsByDay(own)}</div></div>`;
   }
 
@@ -877,33 +908,35 @@
         const childCount = paymentsForContract(c.id).length + kids.length;
         const editingChild = editItem && !editing.isNew && editItem.parentContractId === c.id;
         const open = expandedContracts.has(c.id) || openParents.has(c.id) || editingChild;
-        return `<tr>
+        return `<tr data-id="${esc(c.id)}">
           <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="Спецификации и платежи"><span class="chev">▸</span>${childCount ? `<span class="count">${childCount}</span>` : ''}</button></td>
-          <td><div class="main-cell" title="${esc(c.number)}">№ ${esc(c.number)}</div></td>
-          <td>${cellText(c.documentCard)}</td>
-          <td>${showDate(c.reviewDate || c.date)}</td>
-          <td>${showDate(c.registrationDate || c.date)}</td>
-          <td><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
-          <td class="cell-center">${c.direction ? `<span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span>` : '—'}</td>
-          <td>${cellText(c.subject)}</td>
-          ${moneyCell(c.amount)}
-          <td class="cell-center">${c.vatRate ? c.vatRate + '%' : '—'}</td>
+          <td data-field="number"><div class="main-cell" title="${esc(c.number)}">№ ${esc(c.number)}</div></td>
+          <td data-field="documentCard">${cellText(c.documentCard)}</td>
+          <td data-field="reviewDate">${showDate(c.reviewDate || c.date)}</td>
+          <td data-field="registrationDate">${showDate(c.registrationDate || c.date)}</td>
+          <td data-field="counterparty"><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
+          <td class="cell-center" data-field="direction">${c.direction ? `<span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span>` : '—'}</td>
+          <td data-field="subject">${cellText(c.subject)}</td>
+          ${moneyCell(c.amount, '', 'amount')}
+          <td class="cell-center" data-field="vatRate">${c.vatRate ? c.vatRate + '%' : '—'}</td>
           ${moneyCell(wovat)}
-          <td>${cellText(fundingLabel(c.fundingContractId) || c.fundingSource)}</td>
-          <td>${cellText(c.project)}</td>
-          <td>${cellText(c.responsible)}</td>
-          <td class="cell-center">${labels[c.documentKind] || '—'}</td>
-          <td class="cell-center">${labels[c.kind] || '—'}</td>
-          <td class="cell-center">${labels[c.category] || '—'}</td>
-          <td>—</td>
-          <td class="cell-center">${c.otherExpense ? 'да' : '—'}</td>
+          <td data-field="fundingContractId">${cellText(fundingLabel(c.fundingContractId) || c.fundingSource)}</td>
+          <td data-field="project">${cellText(c.project)}</td>
+          <td data-field="responsible">${cellText(c.responsible)}</td>
+          <td class="cell-center" data-field="documentKind">${labels[c.documentKind] || '—'}</td>
+          <td class="cell-center" data-field="kind">${labels[c.kind] || '—'}</td>
+          <td class="cell-center" data-field="category">${labels[c.category] || '—'}</td>
+          <td data-field="parentContractId">—</td>
+          <td class="cell-center" data-field="otherExpense">${c.otherExpense ? 'да' : '—'}</td>
           ${limitRem === null ? '<td class="cell-number">—</td>' : moneyCell(limitRem)}
           ${moneyCell(payRem)}
-          <td>${cellText(c.comment)}</td>
+          <td data-field="comment">${cellText(c.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${c.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${c.id}')">⌫</button></div>` : ''}</td>
         </tr>${editingChild ? contractEditRow(editItem) : ''}${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
       }).join('')}`;
-    document.getElementById('contracts-table').innerHTML = body
+    const contractsTable = document.getElementById('contracts-table');
+    contractsTable.classList.toggle('can-edit', canEdit());
+    contractsTable.innerHTML = body
       ? `<table class="data-table" style="width:${tableWidth(CONTRACT_COLS)}px">${colgroup(CONTRACT_COLS)}${headRow(CONTRACT_COLS)}<tbody>${body}</tbody></table>`
       : '<div class="empty">Ничего не найдено</div>';
     applyContractFieldRules();
@@ -1054,26 +1087,26 @@
         const vat = p.approvalVatAmount ?? vatSum(gross, rate);
         const kind = p.paymentKind === 'stage' ? 'gu' : p.paymentKind;
         const funding = fundingLabel(p.fundingContractId || c?.fundingContractId);
-        return `<tr>
-          <td>${cellText(p.documentCard)}</td>
-          <td><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
-          <td>${showDate(p.approvalDate || p.date)}</td>
-          <td>${showDate(p.paymentDate || p.date)}</td>
-          <td>${cellText(c ? contractLabel(c) : '')}</td>
-          <td>${cellText(p.counterparty || c?.counterparty)}</td>
-          <td>${cellText(funding)}</td>
-          ${moneyCell(gross)}
-          <td class="money cell-number" title="${esc(money(vat))} · ставка ${rate}%">${money(vat)} <small style="color:var(--muted);font-weight:500">(${rate}%)</small></td>
+        return `<tr data-id="${esc(p.id)}">
+          <td data-field="documentCard">${cellText(p.documentCard)}</td>
+          <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
+          <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
+          <td data-field="paymentDate">${showDate(p.paymentDate)}</td>
+          <td data-field="contractId">${cellText(c ? contractLabel(c) : '')}</td>
+          <td data-field="counterparty">${cellText(p.counterparty || c?.counterparty)}</td>
+          <td data-field="fundingContractId">${cellText(funding)}</td>
+          ${moneyCell(gross, '', 'approvalAmount')}
+          <td class="money cell-number" data-field="approvalVatRate" title="${esc(money(vat))} · ставка ${rate}%">${money(vat)} <small style="color:var(--muted);font-weight:500">(${rate}%)</small></td>
           ${moneyCell(wovat)}
-          ${moneyCell(p.amount)}
-          <td>${cellText(payDocLabel[p.documentKind] || '')}</td>
-          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${payTypeLabel[p.type] || '—'}</span></td>
-          <td class="cell-center">${labels[p.subtype] || '—'}</td>
-          <td>${cellText(p.bdds)}</td>
-          <td>${cellText(p.cfo)}</td>
-          <td class="cell-center">${labels[kind] || '—'}</td>
-          <td>${cellText(p.responsible)}</td>
-          <td>${cellText(p.comment)}</td>
+          ${moneyCell(p.amount, '', 'amount')}
+          <td data-field="documentKind">${cellText(payDocLabel[p.documentKind] || '')}</td>
+          <td class="cell-center" data-field="type"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${payTypeLabel[p.type] || '—'}</span></td>
+          <td class="cell-center" data-field="subtype">${labels[p.subtype] || '—'}</td>
+          <td data-field="bdds">${cellText(p.bdds)}</td>
+          <td data-field="cfo">${cellText(p.cfo)}</td>
+          <td class="cell-center" data-field="paymentKind">${labels[kind] || '—'}</td>
+          <td data-field="responsible">${cellText(p.responsible)}</td>
+          <td data-field="comment">${cellText(p.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button><button class="icon-btn delete" onclick="removePayment('${p.id}')">⌫</button></div>` : ''}</td>
         </tr>`;
       }).join('')}`;
@@ -1082,7 +1115,9 @@
       attrs: `onclick="setPaymentSort('${c.sort}')" title="Сортировать"`,
       suffix: paymentSort.field === c.sort ? (paymentSort.dir < 0 ? ' ▼' : ' ▲') : ''
     } : {});
-    document.getElementById('payments-table').innerHTML = body
+    const paymentsTable = document.getElementById('payments-table');
+    paymentsTable.classList.toggle('can-edit', canEdit());
+    paymentsTable.innerHTML = body
       ? `<table class="data-table" style="width:${tableWidth(PAYMENT_COLS)}px">${colgroup(PAYMENT_COLS)}${head}<tbody>${body}</tbody></table>`
       : `<div class="empty">Ничего не найдено</div>`;
     applyPaymentFieldRules();
@@ -1141,7 +1176,7 @@
       <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(p.number)}" placeholder="П-001" autocomplete="off"></td>
       <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}"></td>
-      <td><input name="paymentDate" type="date" required value="${esc(p.paymentDate || p.date)}"></td>
+      <td><input name="paymentDate" type="date" value="${esc(p.paymentDate || '')}" title="Можно оставить пустой, пока оплата не прошла"></td>
       <td><select name="contractId" onchange="autofillPayment()"><option value="">Договор</option>${optionTags(paymentContractOptions(), p.contractId || '')}</select></td>
       <td><input name="counterparty" required value="${esc(p.counterparty || c?.counterparty || '')}" placeholder="Контрагент" list="counterparty-list"></td>
       <td><select name="fundingContractId">${optionTags(fundingOptions(), p.fundingContractId || '')}</select></td>
@@ -1336,13 +1371,15 @@
   /* ---------- справочники ---------- */
   let dictEditing = null;
   function renderDictionaries() {
-    document.getElementById('dictionaries-grid').innerHTML = DICT_KINDS.map(([kind, title]) => {
+    const dictionariesGrid = document.getElementById('dictionaries-grid');
+    dictionariesGrid.classList.toggle('can-edit', canEdit());
+    dictionariesGrid.innerHTML = DICT_KINDS.map(([kind, title]) => {
       const items = state.dictionaries.filter(d => d.kind === kind).sort((a, b) => a.value.localeCompare(b.value, 'ru'));
       return `<div class="panel">
         <div class="panel-head"><h3>${title}</h3><span class="dict-count">${items.length}</span></div>
         <ul class="dict-list">${items.length ? items.map(d => dictEditing === d.id
           ? `<li><input id="dict-edit-${d.id}" value="${esc(d.value)}" onkeydown="if(event.key==='Enter'){saveDictionary('${d.id}');event.preventDefault();} if(event.key==='Escape'){dictEditing=null;renderDictionaries();}"><button class="icon-btn" title="Сохранить" onclick="saveDictionary('${d.id}')">✓</button><button class="icon-btn delete" title="Отмена" onclick="dictEditing=null;renderDictionaries()">✕</button></li>`
-          : `<li><span title="${esc(d.value)}">${esc(d.value)}</span>${canEdit() ? `<button class="icon-btn" title="Изменить" onclick="dictEditing='${d.id}';renderDictionaries();document.getElementById('dict-edit-${d.id}')?.focus()">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeDictionary('${d.id}')">⌫</button>` : ''}</li>`
+          : `<li data-id="${esc(d.id)}"><span title="${esc(d.value)}">${esc(d.value)}</span>${canEdit() ? `<button class="icon-btn" title="Изменить" onclick="dictEditing='${d.id}';renderDictionaries();document.getElementById('dict-edit-${d.id}')?.focus()">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeDictionary('${d.id}')">⌫</button>` : ''}</li>`
         ).join('') : '<li class="payment-empty">Список пуст</li>'}</ul>
         ${canEdit() ? `<div class="dict-add"><input id="dict-new-${kind}" placeholder="Новое значение" onkeydown="if(event.key==='Enter'){addDictionary('${kind}');event.preventDefault();}"><button class="btn primary" onclick="addDictionary('${kind}')">Добавить</button></div>` : ''}
       </div>`;
@@ -1448,23 +1485,30 @@
     await load();
     toast(done);
   }
-  function startContractRow(id = '') {
+  function focusEditField(rowId, field) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    const named = field ? row.querySelector(`[name="${field}"]`) : null;
+    const el = named && !named.disabled ? named : row.querySelector('input:not(:disabled), select:not(:disabled)');
+    el?.focus();
+    if (el && el.tagName === 'INPUT' && el.type !== 'date' && el.type !== 'checkbox') el.select();
+    row.scrollIntoView({block: 'nearest'});
+  }
+  function startContractRow(id = '', field = '') {
     if (!canEdit()) return;
     editing = {type:'contract', id: id || 'new', isNew: !id};
     const current = id ? contractById(id) : null;
     if (current?.parentContractId) expandedContracts.add(current.parentContractId);
     navigate('contracts');
     renderContracts();
-    document.querySelector('#contract-edit-row input')?.focus();
-    document.getElementById('contract-edit-row')?.scrollIntoView({block: 'nearest'});
+    focusEditField('contract-edit-row', field);
   }
-  function startPaymentRow(id = '') {
+  function startPaymentRow(id = '', field = '') {
     if (!canEdit()) return;
     editing = {type:'payment', id: id || 'new', isNew: !id};
     navigate('payments');
     renderPayments();
-    document.querySelector('#payment-edit-row input')?.focus();
-    document.getElementById('payment-edit-row')?.scrollIntoView({block: 'nearest'});
+    focusEditField('payment-edit-row', field);
   }
   function cancelRowEdit() {
     const type = editing?.type;
@@ -1535,21 +1579,21 @@
       values.approvalVatRate = Number(values.approvalVatRate || 0);
       values.approvalAmountWithoutVat = amountWithoutVat(values.approvalAmount, values.approvalVatRate);
       values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
-      values.paymentDate = values.paymentDate || values.approvalDate;
-      values.approvalDate = values.approvalDate || values.paymentDate;
+      values.paymentDate = String(values.paymentDate || '').trim();
+      values.approvalDate = String(values.approvalDate || '').trim();
       values.date = values.paymentDate;
       values.specificationId = '';
       const contract = contractById(values.contractId);
       if (contract) values.fundingContractId = contract.fundingContractId || '';
       const existing = state.payments.find(p => p.id === editing.id);
-      const status = existing?.status || 'paid';
+      const status = existing?.status === 'cancelled' ? 'cancelled' : (values.paymentDate ? 'paid' : 'planned');
       if (contract && status === 'paid' && values.type === (contract.direction === 'income' ? 'income' : 'expense')) {
         const otherPaid = ownPaid(contract.id) - (existing && existing.contractId === contract.id && existing.status === 'paid' ? Number(existing.amount) : 0);
         if (otherPaid + values.amount > Number(contract.amount) &&
             !confirm(`Операция превысит лимит на ${money(otherPaid + values.amount - contract.amount)}. Сохранить?`)) return;
       }
       const entity = {...(existing || {}), ...values, status, id: existing?.id || uid('payment')};
-      entity.postedDate = entity.postedDate || entity.paymentDate;
+      entity.postedDate = entity.paymentDate;
       entity.approvalEndDate = entity.approvalEndDate || entity.approvalDate;
       entity.costType = entity.bdds;
       entity.mvz = entity.cfo;
