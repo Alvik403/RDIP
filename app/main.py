@@ -138,7 +138,20 @@ CREATE TABLE IF NOT EXISTS audit_log (
   before_state jsonb,
   after_state jsonb
 );
+CREATE TABLE IF NOT EXISTS dictionaries (
+  id text PRIMARY KEY,
+  kind text NOT NULL,
+  value text NOT NULL DEFAULT '',
+  version integer NOT NULL DEFAULT 1
+);
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS parent_contract_id text NOT NULL DEFAULT '';
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS funding_contract_id text NOT NULL DEFAULT '';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS counterparty text NOT NULL DEFAULT '';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS funding_contract_id text NOT NULL DEFAULT '';
+ALTER TABLE payments ALTER COLUMN contract_id DROP NOT NULL;
 """
+
+DICTIONARY_KINDS = ("cfo", "bdds", "project")
 
 
 def connect():
@@ -308,8 +321,14 @@ def contract_from_row(row) -> dict:
         "documentKind": row["document_kind"],
         "category": row["category"],
         "otherExpense": row["other_expense"],
+        "parentContractId": row.get("parent_contract_id") or "",
+        "fundingContractId": row.get("funding_contract_id") or "",
         "version": row["version"],
     }
+
+
+def dictionary_from_row(row) -> dict:
+    return {"id": row["id"], "kind": row["kind"], "value": row["value"], "version": row["version"]}
 
 
 def spec_from_row(row) -> dict:
@@ -329,7 +348,7 @@ def spec_from_row(row) -> dict:
 def payment_from_row(row) -> dict:
     return {
         "id": row["id"],
-        "contractId": row["contract_id"],
+        "contractId": row["contract_id"] or "",
         "number": row["number"],
         "date": row["date"],
         "amount": json_money(row["amount"]),
@@ -356,6 +375,8 @@ def payment_from_row(row) -> dict:
         "mvz": row["mvz"],
         "keyCounterparty": row["key_counterparty"],
         "project": row["project"],
+        "counterparty": row.get("counterparty") or "",
+        "fundingContractId": row.get("funding_contract_id") or "",
         "version": row["version"],
     }
 
@@ -375,18 +396,39 @@ def load_payment(conn, entity_id: str):
     return payment_from_row(row) if row else None
 
 
+def load_dictionary(conn, entity_id: str):
+    row = conn.execute("SELECT * FROM dictionaries WHERE id = %s", (entity_id,)).fetchone()
+    return dictionary_from_row(row) if row else None
+
+
+DICTIONARY_LABELS = {"cfo": "ЦФО", "bdds": "Статья БДДС", "project": "Проект"}
+
+
 def decorate(contracts, specs, payments):
+    paid_by_contract: dict[str, Decimal] = {}
+    for item in payments:
+        if item["status"] == "paid" and item["contractId"]:
+            paid_by_contract[item["contractId"]] = paid_by_contract.get(item["contractId"], Decimal(0)) + Decimal(str(item["amount"]))
+    children: dict[str, list] = {}
+    for contract in contracts:
+        parent = contract.get("parentContractId") or ""
+        if parent:
+            children.setdefault(parent, []).append(contract)
     for contract in contracts:
         amount = Decimal(str(contract["amount"]))
-        spec_sum = sum(Decimal(str(item["amount"])) for item in specs if item["contractId"] == contract["id"])
-        paid = sum(Decimal(str(item["amount"])) for item in payments if item["contractId"] == contract["id"] and item["status"] == "paid")
-        contract["limitRemainder"] = None if contract["kind"] != "framework" else float(amount - spec_sum)
+        own_children = children.get(contract["id"], [])
+        child_sum = sum((Decimal(str(item["amount"])) for item in own_children), Decimal(0))
+        paid = paid_by_contract.get(contract["id"], Decimal(0))
+        paid += sum((paid_by_contract.get(item["id"], Decimal(0)) for item in own_children), Decimal(0))
+        contract["childCount"] = len(own_children)
+        contract["childLimit"] = float(child_sum)
+        contract["limitRemainder"] = None if contract["kind"] != "framework" else float(amount - child_sum)
         contract["payRemainder"] = float(amount - paid)
+        contract["paidTotal"] = float(paid)
     for spec in specs:
         paid = sum(
-            Decimal(str(item["amount"]))
-            for item in payments
-            if item["specificationId"] == spec["id"] and item["status"] == "paid"
+            (Decimal(str(item["amount"])) for item in payments if item["specificationId"] == spec["id"] and item["status"] == "paid"),
+            Decimal(0),
         )
         spec["payRemainder"] = float(Decimal(str(spec["amount"])) - paid)
     return contracts, specs, payments
@@ -407,13 +449,21 @@ def normalize_contract(payload: dict, existing: dict | None) -> dict:
     category = text(payload.get("category") or "limit")
     start_date = text(payload.get("startDate"))
     end_date = text(payload.get("endDate"))
+    parent_id = text(payload.get("parentContractId")).strip()
+    if category == "limit":
+        parent_id = ""
+    elif not parent_id:
+        raise HTTPException(400, "Для спецификации, заявки или доп. соглашения укажите договор-основание")
+    if parent_id:
+        document_kind = "contract"
     if document_kind in ("invoice", "none"):
         direction, kind, category, start_date, end_date = "", "", "limit", "", ""
-    elif kind == "fixed" and category in ("specification", "request"):
+    elif kind == "fixed" and category in ("specification", "request") and not parent_id:
         category = "limit"
     amount = money(payload.get("amount"))
     rate = money(payload.get("vatRate"))
     review = text(payload.get("reviewDate") or payload.get("date"))
+    funding_id = text(payload.get("fundingContractId")).strip()
     return {
         "id": text(payload.get("id") or (existing or {}).get("id") or "contract-" + secrets.token_hex(8)),
         "number": text(payload.get("number")).strip(),
@@ -438,6 +488,8 @@ def normalize_contract(payload: dict, existing: dict | None) -> dict:
         "documentKind": document_kind,
         "category": category or "limit",
         "otherExpense": direction == "expense" and as_bool(payload.get("otherExpense")),
+        "parentContractId": parent_id,
+        "fundingContractId": funding_id,
         "version": int((existing or {}).get("version") or 1),
     }
 
@@ -467,9 +519,15 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
     payment_date = text(payload.get("paymentDate") or payload.get("date") or payload.get("approvalDate"))
     approval_date = text(payload.get("approvalDate") or payment_date)
     subtype = text(payload.get("subtype"))
+    document_kind = text(payload.get("documentKind") or "contract")
+    contract_id = text(payload.get("contractId")).strip()
+    if document_kind == "contract" and not contract_id:
+        raise HTTPException(400, "Для счета по договору выберите договор")
+    if document_kind != "contract":
+        contract_id = ""
     return {
         "id": text(payload.get("id") or (existing or {}).get("id") or "payment-" + secrets.token_hex(8)),
-        "contractId": text(payload.get("contractId")),
+        "contractId": contract_id,
         "number": text(payload.get("number")).strip(),
         "date": payment_date,
         "amount": amount,
@@ -488,7 +546,7 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
         "specificationId": "" if subtype != "specification" else text(payload.get("specificationId")),
         "approvalAmountWithoutVat": net,
         "approvalVatAmount": (approval - net).quantize(MONEY, rounding=ROUND_HALF_UP),
-        "documentKind": text(payload.get("documentKind")),
+        "documentKind": document_kind,
         "subtype": subtype,
         "approvalEndDate": text(payload.get("approvalEndDate") or approval_date),
         "postedDate": text(payload.get("postedDate") or payment_date),
@@ -496,6 +554,23 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
         "mvz": text(payload.get("mvz") or payload.get("cfo")),
         "keyCounterparty": text(payload.get("keyCounterparty")),
         "project": text(payload.get("project")),
+        "counterparty": text(payload.get("counterparty")).strip(),
+        "fundingContractId": text(payload.get("fundingContractId")).strip(),
+        "version": int((existing or {}).get("version") or 1),
+    }
+
+
+def normalize_dictionary(payload: dict, existing: dict | None) -> dict:
+    kind = text(payload.get("kind") or (existing or {}).get("kind")).strip()
+    if kind not in DICTIONARY_KINDS:
+        raise HTTPException(400, "Неизвестный справочник")
+    value = text(payload.get("value")).strip()
+    if not value:
+        raise HTTPException(400, "Укажите значение")
+    return {
+        "id": text(payload.get("id") or (existing or {}).get("id") or "dict-" + secrets.token_hex(8)),
+        "kind": kind,
+        "value": value,
         "version": int((existing or {}).get("version") or 1),
     }
 
@@ -510,7 +585,7 @@ def public_copy(entity: dict) -> dict:
 CONTRACT_SQL = """
 id, number, date, counterparty, subject, direction, kind, amount, vat_rate, project, responsible,
 start_date, end_date, status, comment, review_date, registration_date, document_card, funding_source,
-amount_without_vat, document_kind, category, other_expense, version
+amount_without_vat, document_kind, category, other_expense, parent_contract_id, funding_contract_id, version
 """
 
 
@@ -520,21 +595,40 @@ def contract_params(entity: dict, version: int):
         entity["direction"], entity["kind"], entity["amount"], entity["vatRate"], entity["project"],
         entity["responsible"], entity["startDate"], entity["endDate"], entity["status"], entity["comment"],
         entity["reviewDate"], entity["registrationDate"], entity["documentCard"], entity["fundingSource"],
-        entity["amountWithoutVat"], entity["documentKind"], entity["category"], entity["otherExpense"], version,
+        entity["amountWithoutVat"], entity["documentKind"], entity["category"], entity["otherExpense"],
+        entity.get("parentContractId") or "", entity.get("fundingContractId") or "", version,
     )
 
 
 def upsert_contract(conn, entity: dict, version: int):
+    parent_id = entity.get("parentContractId") or ""
+    if parent_id:
+        if parent_id == entity["id"]:
+            raise HTTPException(400, "Договор не может быть основанием для самого себя")
+        if conn.execute("SELECT 1 FROM contracts WHERE id = %s", (parent_id,)).fetchone() is None:
+            raise HTTPException(400, "Договор-основание не найден")
     assignments = """
     number=%s, date=%s, counterparty=%s, subject=%s, direction=%s, kind=%s, amount=%s, vat_rate=%s,
     project=%s, responsible=%s, start_date=%s, end_date=%s, status=%s, comment=%s, review_date=%s,
     registration_date=%s, document_card=%s, funding_source=%s, amount_without_vat=%s, document_kind=%s,
-    category=%s, other_expense=%s, version=%s
+    category=%s, other_expense=%s, parent_contract_id=%s, funding_contract_id=%s, version=%s
     """
     params = contract_params(entity, version)[1:] + (entity["id"],)
     conn.execute(f"UPDATE contracts SET {assignments} WHERE id = %s", params)
     if conn.execute("SELECT 1 FROM contracts WHERE id = %s", (entity["id"],)).fetchone() is None:
-        conn.execute(f"INSERT INTO contracts ({CONTRACT_SQL}) VALUES ({', '.join(['%s'] * 24)})", contract_params(entity, version))
+        conn.execute(f"INSERT INTO contracts ({CONTRACT_SQL}) VALUES ({', '.join(['%s'] * 26)})", contract_params(entity, version))
+
+
+def upsert_dictionary(conn, entity: dict, version: int):
+    updated = conn.execute(
+        "UPDATE dictionaries SET kind=%s, value=%s, version=%s WHERE id=%s",
+        (entity["kind"], entity["value"], version, entity["id"]),
+    )
+    if updated.rowcount == 0:
+        conn.execute(
+            "INSERT INTO dictionaries (id, kind, value, version) VALUES (%s, %s, %s, %s)",
+            (entity["id"], entity["kind"], entity["value"], version),
+        )
 
 
 def upsert_spec(conn, entity: dict, version: int):
@@ -554,22 +648,24 @@ def upsert_spec(conn, entity: dict, version: int):
 
 
 def upsert_payment(conn, entity: dict, version: int):
-    if conn.execute("SELECT 1 FROM contracts WHERE id = %s", (entity["contractId"],)).fetchone() is None:
+    contract_id = entity.get("contractId") or ""
+    if contract_id and conn.execute("SELECT 1 FROM contracts WHERE id = %s", (contract_id,)).fetchone() is None:
         raise HTTPException(400, "Договор не найден")
     values = (
-        entity["contractId"], entity["number"], entity["date"], entity["amount"], entity["type"], entity["paymentKind"],
+        contract_id or None, entity["number"], entity["date"], entity["amount"], entity["type"], entity["paymentKind"],
         entity["status"], entity["comment"], entity["approvalDate"], entity["paymentDate"], entity["documentCard"],
         entity["responsible"], entity["cfo"], entity["bdds"], entity["approvalAmount"], entity["approvalVatRate"],
         entity["specificationId"], entity["approvalAmountWithoutVat"], entity["approvalVatAmount"], entity["documentKind"],
         entity["subtype"], entity["approvalEndDate"], entity["postedDate"], entity["costType"], entity["mvz"],
-        entity["keyCounterparty"], entity["project"], version, entity["id"],
+        entity["keyCounterparty"], entity["project"], entity.get("counterparty") or "", entity.get("fundingContractId") or "",
+        version, entity["id"],
     )
     updated = conn.execute(
         """UPDATE payments SET contract_id=%s, number=%s, date=%s, amount=%s, type=%s, payment_kind=%s, status=%s,
            comment=%s, approval_date=%s, payment_date=%s, document_card=%s, responsible=%s, cfo=%s, bdds=%s,
            approval_amount=%s, approval_vat_rate=%s, specification_id=%s, approval_amount_without_vat=%s,
            approval_vat_amount=%s, document_kind=%s, subtype=%s, approval_end_date=%s, posted_date=%s, cost_type=%s,
-           mvz=%s, key_counterparty=%s, project=%s, version=%s WHERE id=%s""",
+           mvz=%s, key_counterparty=%s, project=%s, counterparty=%s, funding_contract_id=%s, version=%s WHERE id=%s""",
         values,
     )
     if updated.rowcount == 0:
@@ -578,9 +674,9 @@ def upsert_payment(conn, entity: dict, version: int):
                  id, contract_id, number, date, amount, type, payment_kind, status, comment, approval_date, payment_date,
                  document_card, responsible, cfo, bdds, approval_amount, approval_vat_rate, specification_id,
                  approval_amount_without_vat, approval_vat_amount, document_kind, subtype, approval_end_date, posted_date,
-                 cost_type, mvz, key_counterparty, project, version
+                 cost_type, mvz, key_counterparty, project, counterparty, funding_contract_id, version
                ) VALUES (
-                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                )""",
             (entity["id"], *values[:-1]),
         )
@@ -591,8 +687,10 @@ def contract_bundle(conn, entity_id: str):
     if not contract:
         return None
     specs = [spec_from_row(row) for row in conn.execute("SELECT * FROM specifications WHERE contract_id = %s", (entity_id,))]
-    payments = [payment_from_row(row) for row in conn.execute("SELECT * FROM payments WHERE contract_id = %s", (entity_id,))]
-    return {"entity": contract, "specifications": specs, "payments": payments}
+    children = [contract_from_row(row) for row in conn.execute("SELECT * FROM contracts WHERE parent_contract_id = %s", (entity_id,))]
+    ids = [entity_id] + [child["id"] for child in children]
+    payments = [payment_from_row(row) for row in conn.execute("SELECT * FROM payments WHERE contract_id = ANY(%s)", (ids,))]
+    return {"entity": contract, "specifications": specs, "children": children, "payments": payments}
 
 
 def apply_saved(conn, kind: str, entity: dict, version: int):
@@ -602,9 +700,74 @@ def apply_saved(conn, kind: str, entity: dict, version: int):
         upsert_contract(conn, entity, version)
     elif kind == "specification":
         upsert_spec(conn, entity, version)
+    elif kind == "dictionary":
+        upsert_dictionary(conn, entity, version)
     else:
         upsert_payment(conn, entity, version)
     return public_copy(entity)
+
+
+def migrate_specifications(conn):
+    """Переносит строки таблицы specifications в дочерние договоры и перепривязывает платежи."""
+    rows = conn.execute("SELECT * FROM specifications").fetchall()
+    if not rows:
+        return
+    for row in rows:
+        spec = spec_from_row(row)
+        parent = load_contract(conn, spec["contractId"])
+        if not parent:
+            conn.execute("DELETE FROM specifications WHERE id = %s", (spec["id"],))
+            continue
+        amount = Decimal(str(spec["amount"]))
+        rate = Decimal(str(spec["vatRate"]))
+        if load_contract(conn, spec["id"]) is None:
+            upsert_contract(conn, {
+                "id": spec["id"],
+                "number": spec["number"],
+                "date": spec["date"] or parent["date"],
+                "counterparty": parent["counterparty"],
+                "subject": spec["subject"],
+                "direction": parent["direction"],
+                "kind": "fixed",
+                "amount": amount,
+                "vatRate": rate,
+                "project": parent["project"],
+                "responsible": parent["responsible"],
+                "startDate": "",
+                "endDate": "",
+                "status": spec["status"] or "active",
+                "comment": "",
+                "reviewDate": spec["date"] or parent["date"],
+                "registrationDate": spec["date"] or parent["date"],
+                "documentCard": "",
+                "fundingSource": parent["fundingSource"],
+                "amountWithoutVat": without_vat(amount, rate),
+                "documentKind": "contract",
+                "category": "specification",
+                "otherExpense": False,
+                "parentContractId": parent["id"],
+                "fundingContractId": parent.get("fundingContractId") or "",
+            }, 1)
+        conn.execute(
+            "UPDATE payments SET contract_id = %s, specification_id = '' WHERE specification_id = %s",
+            (spec["id"], spec["id"]),
+        )
+        conn.execute("DELETE FROM specifications WHERE id = %s", (spec["id"],))
+
+
+def seed_dictionaries(conn):
+    if conn.execute("SELECT 1 FROM dictionaries LIMIT 1").fetchone():
+        return
+    sources = {
+        "cfo": "SELECT DISTINCT cfo AS value FROM payments WHERE cfo <> ''",
+        "bdds": "SELECT DISTINCT bdds AS value FROM payments WHERE bdds <> ''",
+        "project": "SELECT DISTINCT project AS value FROM contracts WHERE project <> ''",
+    }
+    for kind, sql in sources.items():
+        for row in conn.execute(sql).fetchall():
+            value = text(row["value"]).strip()
+            if value:
+                upsert_dictionary(conn, {"id": "dict-" + secrets.token_hex(8), "kind": kind, "value": value}, 1)
 
 
 def seed(conn):
@@ -642,6 +805,8 @@ def seed(conn):
             "documentKind": text(raw.get("documentKind") or "contract"),
             "category": text(raw.get("category") or "limit"),
             "otherExpense": as_bool(raw.get("otherExpense")),
+            "parentContractId": text(raw.get("parentContractId")),
+            "fundingContractId": text(raw.get("fundingContractId")),
         }, 1)
     for raw in payload.get("specifications") or []:
         upsert_spec(conn, {
@@ -690,7 +855,16 @@ def seed(conn):
             "mvz": text(raw.get("mvz")),
             "keyCounterparty": text(raw.get("keyCounterparty")),
             "project": text(raw.get("project")),
+            "counterparty": text(raw.get("counterparty")),
+            "fundingContractId": text(raw.get("fundingContractId")),
         }, 1)
+    for raw in payload.get("dictionaries") or []:
+        if text(raw.get("kind")) in DICTIONARY_KINDS and text(raw.get("value")).strip():
+            upsert_dictionary(conn, {
+                "id": text(raw.get("id") or "dict-" + secrets.token_hex(8)),
+                "kind": text(raw.get("kind")),
+                "value": text(raw.get("value")).strip(),
+            }, 1)
 
 
 def prepare_database():
@@ -703,6 +877,9 @@ def prepare_database():
                     if sql:
                         conn.execute(sql)
                 seed(conn)
+                migrate_specifications(conn)
+                conn.execute("UPDATE payments SET counterparty = c.counterparty FROM contracts c WHERE payments.contract_id = c.id AND payments.counterparty = ''")
+                seed_dictionaries(conn)
             return
         except Exception as exc:
             last_error = exc
@@ -1050,6 +1227,14 @@ def list_payments(request: Request):
     return payments
 
 
+@app.get("/api/dictionaries")
+def list_dictionaries(request: Request):
+    guard(request, ALL_GROUPS)
+    with transaction() as conn:
+        rows = conn.execute("SELECT * FROM dictionaries ORDER BY kind, lower(value)").fetchall()
+    return [dictionary_from_row(row) for row in rows]
+
+
 EXPORT_HEADERS = [
     "Раздел", "Номер", "Карта документа", "Дата рассмотрения", "Дата регистрации",
     "Контрагент", "Предмет", "Сумма", "Ставка НДС", "Источник финансирования",
@@ -1057,7 +1242,9 @@ EXPORT_HEADERS = [
     "Вид договора", "Категория", "Дата начала", "Дата окончания", "Прочие расходы",
     "Статус", "Номер договора", "Дата согласования", "Дата оплаты", "Вид платежа",
     "Подвид", "БДДС", "ЦФО", "Сумма с НДС", "Сумма оплаты", "Вид оплаты",
+    "Договор-основание",
 ]
+OPTIONAL_HEADERS = {"Договор-основание"}
 VAT_CHOICES = {Decimal(item) for item in ("0", "5", "7", "10", "20", "22")}
 
 
@@ -1118,7 +1305,7 @@ def import_money(value, line: int, column: str, required: bool) -> Decimal:
 def import_vat(value, line: int, column: str) -> Decimal:
     raw = text(value).strip().replace("%", "").replace(" ", "")
     if not raw:
-        return Decimal("20.00")
+        return Decimal("22.00")
     number = parse_money(raw)
     if number is None or number not in VAT_CHOICES:
         raise RowProblem(line, column, "допустимы ставки 0, 5, 7, 10, 20 и 22")
@@ -1146,7 +1333,7 @@ def csv_table(raw: str):
     if not rows or not any(cell.strip() for cell in rows[0]):
         raise HTTPException(400, "В файле нет заголовка")
     headers = [cell.strip() for cell in rows[0]]
-    missing = [name for name in EXPORT_HEADERS if name not in headers]
+    missing = [name for name in EXPORT_HEADERS if name not in headers and name not in OPTIONAL_HEADERS]
     if missing:
         raise HTTPException(400, "Строка 1: нет столбца «" + "», «".join(missing) + "»")
     seen = {}
@@ -1167,12 +1354,18 @@ def csv_table(raw: str):
     return parsed
 
 
-DOCUMENT_KIND = {"договор": "contract", "счет": "invoice", "без счета, договора": "none", "contract": "contract", "invoice": "invoice", "none": "none"}
+DOCUMENT_KIND = {
+    "договор": "contract", "счет": "invoice", "без счета, договора": "none",
+    "счет по договору": "contract", "счет без договора": "invoice", "без договора и без счета": "none",
+    "contract": "contract", "invoice": "invoice", "none": "none",
+}
+CONTRACT_DOC_LABELS = [("contract", "Договор"), ("invoice", "Счёт"), ("none", "Без счета, договора")]
+PAYMENT_DOC_LABELS = [("contract", "Счет по договору"), ("invoice", "Счет без договора"), ("none", "Без договора и без счета")]
 DIRECTION = {"доходный": "income", "расходный": "expense", "income": "income", "expense": "expense"}
 CONTRACT_KIND = {"рамочный": "framework", "нерамочный": "fixed", "framework": "framework", "fixed": "fixed"}
 CATEGORY = {"лимит": "limit", "спецификация": "specification", "заявка": "request", "доп. соглашение": "addendum", "limit": "limit", "specification": "specification", "request": "request", "addendum": "addendum"}
 CONTRACT_STATUS = {"черновик": "draft", "действует": "active", "завершен": "closed", "draft": "draft", "active": "active", "closed": "closed"}
-PAY_TYPE = {"поступление": "income", "оплата": "expense", "платеж": "expense", "доходный": "income", "расходный": "expense", "income": "income", "expense": "expense"}
+PAY_TYPE = {"поступление": "income", "оплата": "expense", "платеж": "expense", "списание": "expense", "доходный": "income", "расходный": "expense", "income": "income", "expense": "expense"}
 PAY_STATUS = {"запланирован": "planned", "исполнен": "paid", "отменен": "cancelled", "planned": "planned", "paid": "paid", "cancelled": "cancelled"}
 PAY_KIND = {"аванс": "advance", "постоплата": "postpay", "гу": "gu", "advance": "advance", "postpay": "postpay", "gu": "gu"}
 SUBTYPE = {"спецификация": "specification", "заявка": "request", "счет": "invoice", "specification": "specification", "request": "request", "invoice": "invoice"}
@@ -1197,39 +1390,68 @@ def export_csv(contracts: list, payments: list) -> str:
     buffer = StringIO()
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(EXPORT_HEADERS)
-    for contract in contracts:
+    by_id = {contract["id"]: contract for contract in contracts}
+
+    def number_of(contract_id: str) -> str:
+        found = by_id.get(contract_id or "")
+        return text(found["number"]) if found else ""
+
+    def depth(contract: dict) -> int:
+        if contract.get("parentContractId"):
+            return 2
+        return 1 if contract.get("fundingContractId") else 0
+
+    # порядок, пригодный для обратного импорта: источники → расходники → спецификации
+    for contract in sorted(contracts, key=depth):
         writer.writerow([
             "Договор", contract["number"], contract["documentCard"], contract["reviewDate"] or contract["date"],
             contract["registrationDate"], contract["counterparty"], contract["subject"], csv_amount(contract["amount"]),
-            csv_amount(contract["vatRate"]), contract["fundingSource"], contract["project"], contract["responsible"],
-            contract["comment"], display_choice(contract["documentKind"], [("contract", "Договор"), ("invoice", "Счёт"), ("none", "Без счета, договора")]),
+            csv_amount(contract["vatRate"]), number_of(contract.get("fundingContractId")) or contract["fundingSource"],
+            contract["project"], contract["responsible"],
+            contract["comment"], display_choice(contract["documentKind"], CONTRACT_DOC_LABELS),
             display_choice(contract["direction"], [("income", "Доходный"), ("expense", "Расходный")]),
             display_choice(contract["kind"], [("framework", "Рамочный"), ("fixed", "Нерамочный")]),
             display_choice(contract["category"], [("limit", "Лимит"), ("specification", "Спецификация"), ("request", "Заявка"), ("addendum", "Доп. соглашение")]),
             contract["startDate"], contract["endDate"], "да" if contract["otherExpense"] else "",
             display_choice(contract["status"], [("draft", "Черновик"), ("active", "Действует"), ("closed", "Завершен")]),
             "", "", "", "", "", "", "", "", "", "",
+            number_of(contract.get("parentContractId")),
         ])
-    by_id = {contract["id"]: contract for contract in contracts}
     for payment in payments:
         parent = by_id.get(payment["contractId"]) or {}
         writer.writerow([
             "Платеж", payment["number"], payment["documentCard"], "", "",
-            parent.get("counterparty") or payment.get("keyCounterparty") or "", "", "",
-            csv_amount(payment["approvalVatRate"]), "", payment.get("project") or "", payment["responsible"],
-            payment["comment"], display_choice(payment["documentKind"], [("contract", "Договор"), ("invoice", "Счёт"), ("none", "Без счета, договора")]),
+            payment.get("counterparty") or parent.get("counterparty") or payment.get("keyCounterparty") or "", "", "",
+            csv_amount(payment["approvalVatRate"]), number_of(payment.get("fundingContractId")), payment.get("project") or "", payment["responsible"],
+            payment["comment"], display_choice(payment["documentKind"], PAYMENT_DOC_LABELS),
             "", "", "", "", "", "",
             display_choice(payment["status"], [("planned", "Запланирован"), ("paid", "Исполнен"), ("cancelled", "Отменен")]),
             parent.get("number") or "", payment["approvalDate"], payment["paymentDate"] or payment["date"],
-            display_choice(payment["type"], [("income", "Поступление"), ("expense", "Оплата")]),
+            display_choice(payment["type"], [("income", "Поступление"), ("expense", "Списание")]),
             display_choice(payment["subtype"], [("specification", "Спецификация"), ("request", "Заявка"), ("invoice", "Счёт")]),
             payment["bdds"], payment["cfo"], csv_amount(payment["approvalAmount"]), csv_amount(payment["amount"]),
             display_choice(payment["paymentKind"], [("advance", "Аванс"), ("postpay", "Постоплата"), ("gu", "ГУ"), ("stage", "ГУ")]),
+            "",
         ])
     return "\ufeff" + buffer.getvalue()
 
 
-def contract_from_import(record: dict, line: int) -> dict:
+def resolve_contract_ref(value: str, contracts_by_number: dict, line: int, column: str, required: bool):
+    raw = text(value).strip()
+    if not raw:
+        if required:
+            raise RowProblem(line, column, "укажите номер договора")
+        return None
+    found = contracts_by_number.get(raw)
+    if found is None:
+        raise RowProblem(line, column, f"договор «{raw}» не найден")
+    if found == "":
+        raise RowProblem(line, column, f"в реестре несколько договоров «{raw}»")
+    return found
+
+
+def contract_from_import(record: dict, line: int, contracts_by_number: dict | None = None) -> dict:
+    contracts_by_number = contracts_by_number or {}
     number = record["Номер"].strip()
     if not number:
         raise RowProblem(line, "Номер", "укажите номер")
@@ -1241,10 +1463,18 @@ def contract_from_import(record: dict, line: int) -> dict:
     direction = mapped(record["Направление"], DIRECTION, line, "Направление", "" if document_kind in ("invoice", "none") else "expense")
     kind = mapped(record["Вид договора"], CONTRACT_KIND, line, "Вид договора", "" if document_kind in ("invoice", "none") else "fixed")
     category = mapped(record["Категория"], CATEGORY, line, "Категория", "limit")
+    parent = None
+    if category != "limit":
+        parent = resolve_contract_ref(record.get("Договор-основание", ""), contracts_by_number, line, "Договор-основание", True)
+        document_kind = "contract"
+        direction = direction or parent.get("direction") or ""
     if document_kind in ("invoice", "none"):
         direction, kind, category = "", "", "limit"
-    elif kind == "fixed" and category in ("specification", "request"):
+    elif kind == "fixed" and category in ("specification", "request") and parent is None:
         category = "limit"
+    funding_raw = record["Источник финансирования"].strip()
+    funding = contracts_by_number.get(funding_raw) if funding_raw else None
+    funding_id = funding["id"] if isinstance(funding, dict) else ""
     amount = import_money(record["Сумма"], line, "Сумма", True)
     rate = import_vat(record["Ставка НДС"], line, "Ставка НДС")
     review = import_date(record["Дата рассмотрения"], line, "Дата рассмотрения", True)
@@ -1280,11 +1510,13 @@ def contract_from_import(record: dict, line: int) -> dict:
         "reviewDate": review,
         "registrationDate": import_date(record["Дата регистрации"], line, "Дата регистрации", False) or review,
         "documentCard": card,
-        "fundingSource": record["Источник финансирования"].strip(),
+        "fundingSource": funding_raw,
         "amountWithoutVat": without_vat(amount, rate),
         "documentKind": document_kind,
         "category": category,
         "otherExpense": direction == "expense" and fold(other_raw) in YES_VALUES,
+        "parentContractId": parent["id"] if parent else "",
+        "fundingContractId": funding_id,
         "version": 1,
     }
 
@@ -1293,14 +1525,11 @@ def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> d
     number = record["Номер"].strip()
     if not number:
         raise RowProblem(line, "Номер", "укажите номер")
-    contract_number = record["Номер договора"].strip()
-    if not contract_number:
-        raise RowProblem(line, "Номер договора", "укажите номер договора")
-    found = contracts_by_number.get(contract_number)
-    if found is None:
-        raise RowProblem(line, "Номер договора", f"договор «{contract_number}» не найден")
-    if found == "":
-        raise RowProblem(line, "Номер договора", f"в реестре несколько договоров «{contract_number}»")
+    document_kind = mapped(record["Вид документа"], DOCUMENT_KIND, line, "Вид документа", "contract")
+    found = resolve_contract_ref(record["Номер договора"], contracts_by_number, line, "Номер договора", document_kind == "contract") or {}
+    if document_kind != "contract":
+        found = {}
+    funding = resolve_contract_ref(record["Источник финансирования"], contracts_by_number, line, "Источник финансирования", False)
     card = record["Карта документа"].strip()
     responsible = record["Ответственный"].strip()
     comment = record["Комментарий"].strip()
@@ -1315,9 +1544,10 @@ def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> d
     subtype = mapped(record["Подвид"], SUBTYPE, line, "Подвид", "invoice")
     net = without_vat(approval, rate)
     parent = found
+    counterparty = record["Контрагент"].strip() or parent.get("counterparty") or ""
     return {
         "id": "payment-" + secrets.token_hex(8),
-        "contractId": parent["id"],
+        "contractId": parent.get("id") or "",
         "number": number,
         "date": payment_date,
         "amount": amount,
@@ -1336,14 +1566,16 @@ def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> d
         "specificationId": "",
         "approvalAmountWithoutVat": net,
         "approvalVatAmount": (approval - net).quantize(MONEY, rounding=ROUND_HALF_UP),
-        "documentKind": mapped(record["Вид документа"], DOCUMENT_KIND, line, "Вид документа", "contract"),
+        "documentKind": document_kind,
         "subtype": subtype,
         "approvalEndDate": approval_date,
         "postedDate": payment_date,
         "costType": record["БДДС"].strip(),
         "mvz": record["ЦФО"].strip(),
-        "keyCounterparty": parent.get("counterparty") or "",
+        "keyCounterparty": counterparty,
         "project": record["Проект"].strip() or parent.get("project") or "",
+        "counterparty": counterparty,
+        "fundingContractId": funding["id"] if funding else "",
         "version": 1,
     }
 
@@ -1381,7 +1613,7 @@ def import_registry(request: Request, payload: dict = Body()):
         stored_contracts = [contract_from_row(row) for row in conn.execute("SELECT * FROM contracts")]
         stored_payments = conn.execute("SELECT contract_id, number FROM payments").fetchall()
         contracts_by_number = index_contracts(stored_contracts)
-        payment_keys = {(row["contract_id"], text(row["number"]).strip()) for row in stored_payments}
+        payment_keys = {(row["contract_id"] or "", text(row["number"]).strip()) for row in stored_payments}
         contract_lines = {}
         payment_lines = {}
         contract_rows = []
@@ -1394,9 +1626,18 @@ def import_registry(request: Request, payload: dict = Body()):
                 payment_rows.append((line, record))
             else:
                 errors.append(RowProblem(line, "Раздел", "укажите «Договор» или «Платеж»").text())
+
+        def reference_depth(item) -> int:
+            record = item[1]
+            if text(record.get("Договор-основание")).strip():
+                return 2
+            return 1 if text(record.get("Источник финансирования")).strip() else 0
+
+        # сначала самостоятельные договоры, затем те, что ссылаются на источник, затем спецификации
+        contract_rows.sort(key=reference_depth)
         for line, record in contract_rows:
             try:
-                entity = contract_from_import(record, line)
+                entity = contract_from_import(record, line, contracts_by_number)
             except RowProblem as problem:
                 errors.append(problem.text())
                 continue
@@ -1480,6 +1721,15 @@ def create_entity(request: Request, kind: str, payload: dict):
             saved = apply_saved(conn, kind, entity, 1)
             label = saved["number"]
             action = "Спецификация добавлена"
+        elif kind == "dictionary":
+            entity = normalize_dictionary(payload, None)
+            if load_dictionary(conn, entity["id"]):
+                raise HTTPException(409, "Строку уже изменили")
+            if conn.execute("SELECT 1 FROM dictionaries WHERE kind = %s AND lower(value) = lower(%s)", (entity["kind"], entity["value"])).fetchone():
+                raise HTTPException(400, "Такое значение уже есть в справочнике")
+            saved = apply_saved(conn, kind, entity, 1)
+            label = f"{DICTIONARY_LABELS[saved['kind']]} · {saved['value']}"
+            action = "Значение справочника добавлено"
         else:
             entity = normalize_payment(payload, None)
             if load_payment(conn, entity["id"]):
@@ -1494,7 +1744,7 @@ def create_entity(request: Request, kind: str, payload: dict):
 def update_entity(request: Request, kind: str, entity_id: str, payload: dict):
     row = guard(request, EDIT_GROUPS)
     with transaction() as conn:
-        current = {"contract": load_contract, "specification": load_spec, "payment": load_payment}[kind](conn, entity_id)
+        current = LOADERS[kind](conn, entity_id)
         if not current:
             raise HTTPException(404, "Запись не найдена")
         if int(payload.get("version") or 0) != int(current["version"]):
@@ -1505,6 +1755,9 @@ def update_entity(request: Request, kind: str, entity_id: str, payload: dict):
         elif kind == "specification":
             entity = normalize_spec({**payload, "id": entity_id}, current)
             action, label = "Спецификация изменена", entity["number"]
+        elif kind == "dictionary":
+            entity = normalize_dictionary({**payload, "id": entity_id}, current)
+            action, label = "Значение справочника изменено", f"{DICTIONARY_LABELS[entity['kind']]} · {entity['value']}"
         else:
             entity = normalize_payment({**payload, "id": entity_id}, current)
             action, label = "Операция изменена", f"{entity['number']} · {entity['amount']}"
@@ -1516,7 +1769,7 @@ def update_entity(request: Request, kind: str, entity_id: str, payload: dict):
 def delete_entity(request: Request, kind: str, entity_id: str, version: int):
     row = guard(request, EDIT_GROUPS)
     with transaction() as conn:
-        current = {"contract": load_contract, "specification": load_spec, "payment": load_payment}[kind](conn, entity_id)
+        current = LOADERS[kind](conn, entity_id)
         if not current:
             raise HTTPException(404, "Запись не найдена")
         if version != int(current["version"]):
@@ -1525,10 +1778,16 @@ def delete_entity(request: Request, kind: str, entity_id: str, version: int):
             before = contract_bundle(conn, entity_id)
             label = f"№ {current['number']} · {current['counterparty']}"
             action = "Договор удален"
+            conn.execute("DELETE FROM contracts WHERE parent_contract_id = %s", (entity_id,))
+            conn.execute("UPDATE contracts SET funding_contract_id = '' WHERE funding_contract_id = %s", (entity_id,))
+            conn.execute("UPDATE payments SET funding_contract_id = '' WHERE funding_contract_id = %s", (entity_id,))
             conn.execute("DELETE FROM contracts WHERE id = %s AND version = %s", (entity_id, version))
         elif kind == "specification":
             before, label, action = current, current["number"], "Спецификация удалена"
             conn.execute("DELETE FROM specifications WHERE id = %s AND version = %s", (entity_id, version))
+        elif kind == "dictionary":
+            before, label, action = current, f"{DICTIONARY_LABELS[current['kind']]} · {current['value']}", "Значение справочника удалено"
+            conn.execute("DELETE FROM dictionaries WHERE id = %s AND version = %s", (entity_id, version))
         else:
             before, label, action = current, f"{current['number']} · {current['amount']}", "Операция удалена"
             conn.execute("DELETE FROM payments WHERE id = %s AND version = %s", (entity_id, version))
@@ -1581,11 +1840,34 @@ def delete_payment(request: Request, entity_id: str, version: int):
     return delete_entity(request, "payment", entity_id, version)
 
 
+@app.post("/api/dictionaries")
+def post_dictionary(request: Request, payload: dict = Body()):
+    return create_entity(request, "dictionary", payload)
+
+
+@app.patch("/api/dictionaries/{entity_id}")
+def patch_dictionary(request: Request, entity_id: str, payload: dict = Body()):
+    return update_entity(request, "dictionary", entity_id, payload)
+
+
+@app.delete("/api/dictionaries/{entity_id}")
+def delete_dictionary(request: Request, entity_id: str, version: int):
+    return delete_entity(request, "dictionary", entity_id, version)
+
+
+TABLES = {"contract": "contracts", "specification": "specifications", "payment": "payments", "dictionary": "dictionaries"}
+LOADERS = {"contract": load_contract, "specification": load_spec, "payment": load_payment, "dictionary": load_dictionary}
+
+
 def restore_record(conn, kind: str, entity: dict):
     version = int(entity.get("version") or 1)
-    row = conn.execute(f"SELECT version FROM { {'contract': 'contracts', 'specification': 'specifications', 'payment': 'payments'}[kind] } WHERE id = %s", (entity["id"],)).fetchone()
+    row = conn.execute(f"SELECT version FROM {TABLES[kind]} WHERE id = %s", (entity["id"],)).fetchone()
     if row:
         version = int(row["version"]) + 1
+    if kind == "contract":
+        entity = {**entity, "parentContractId": entity.get("parentContractId") or "", "fundingContractId": entity.get("fundingContractId") or ""}
+    if kind == "payment":
+        entity = {**entity, "counterparty": entity.get("counterparty") or "", "fundingContractId": entity.get("fundingContractId") or ""}
     apply_saved(conn, kind, entity, version)
 
 
@@ -1600,13 +1882,15 @@ def rollback(request: Request, audit_id: int):
         kind = entry["entity_type"]
         if isinstance(before, dict) and "entity" in before and "specifications" in before:
             restore_record(conn, "contract", before["entity"])
+            for child in before.get("children") or []:
+                restore_record(conn, "contract", child)
             for spec in before.get("specifications") or []:
                 restore_record(conn, "specification", spec)
             for payment in before.get("payments") or []:
                 restore_record(conn, "payment", payment)
             after = before
         elif before is None:
-            table = {"contract": "contracts", "specification": "specifications", "payment": "payments"}[kind]
+            table = TABLES[kind]
             conn.execute(f"DELETE FROM {table} WHERE id = %s", (entry["entity_id"],))
             after = None
         else:

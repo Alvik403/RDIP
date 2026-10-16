@@ -20,6 +20,8 @@
       --background: #f5f7fa;
       --shadow: 0 8px 30px rgba(31, 45, 72, .08);
       --radius: 14px;
+      --row-h: 40px;
+      --table-offset: 262px;
     }
     * { box-sizing: border-box; }
     body {
@@ -41,13 +43,7 @@
     }
     .app.sidebar-hidden .sidebar { transform: translateX(-100%); pointer-events: none; }
     .brand { display: flex; align-items: center; padding: 5px 10px 28px; }
-    .brand-mark {
-      width: 39px; height: 39px; border-radius: 11px; display: grid; place-items: center;
-      font-size: 20px; font-weight: 800; background: linear-gradient(135deg, #5288ff, #315ed2);
-      box-shadow: 0 8px 20px rgba(56, 103, 220, .35);
-    }
     .brand strong { display: block; font-size: 16px; line-height: 1.35; }
-    .brand small { color: #9facbf; }
     .nav { display: flex; flex: 1; flex-direction: column; gap: 7px; }
     .nav button {
       width: 100%; border: 0; border-radius: 10px; padding: 11px 13px;
@@ -58,7 +54,6 @@
     .nav button.active { color: white; background: var(--navy-2); box-shadow: inset 3px 0 var(--blue); }
     .nav .icon { width: 21px; font-size: 17px; text-align: center; }
     .nav button[data-page="history"] { margin-top: auto; }
-    .sidebar-foot { margin-top: auto; padding: 15px 10px 0; color: #78879d; font-size: 12px; }
     main { grid-column: 2; min-width: 0; }
     .topbar {
       height: 70px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between;
@@ -74,16 +69,16 @@
     .sidebar-toggle:hover { color: var(--blue); border-color: #b8ccf5; background: var(--blue-soft); }
     .sync { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
     .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-    .content { padding: 24px 28px 44px; max-width: none; }
+    .content { padding: 20px 28px 28px; max-width: none; }
     .page { display: none; }
     .page.active { display: block; animation: enter .2s ease; }
     @keyframes enter { from { opacity: 0; transform: translateY(4px); } }
     .page-head {
       display: flex; align-items: flex-end; justify-content: space-between;
-      gap: 20px; margin-bottom: 22px;
+      gap: 20px; margin-bottom: 14px;
     }
-    .page-head h2 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.4px; }
-    .page-head p { margin: 0; color: var(--muted); }
+    .page-head h2 { margin: 0 0 2px; font-size: 22px; letter-spacing: -.4px; }
+    .page-head p { margin: 0; color: var(--muted); font-size: 13px; }
     .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     #import-report { margin-bottom: 16px; }
     .import-report h3, .import-report h4 { margin: 0 0 8px; }
@@ -91,220 +86,206 @@
     .import-report ul { margin: 0; padding-left: 18px; }
     .import-report li { margin: 4px 0; }
     .btn {
-      border: 1px solid var(--line); border-radius: 9px; padding: 9px 14px;
+      border: 1px solid var(--line); border-radius: 9px; padding: 8px 13px;
       color: var(--ink); background: white; font-weight: 600; transition: .15s ease;
     }
     .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,60,.1); }
     .btn.primary { border-color: var(--blue); color: white; background: var(--blue); }
-    .btn.danger { color: var(--red); }
-    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17px; margin-bottom: 22px; }
+    .btn.small { padding: 5px 9px; font-size: 12px; }
+    .cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .card {
       border: 1px solid var(--line); border-radius: var(--radius);
-      padding: 20px; background: var(--surface); box-shadow: var(--shadow);
+      padding: 14px 16px; background: var(--surface); box-shadow: var(--shadow);
     }
-    .metric-label { color: var(--muted); margin-bottom: 9px; }
-    .metric-value { font-size: 25px; font-weight: 750; letter-spacing: -.6px; }
-    .metric-note { margin-top: 7px; font-size: 12px; color: var(--muted); }
+    .metric-label { color: var(--muted); margin-bottom: 6px; font-size: 12px; }
+    .metric-value { font-size: 19px; font-weight: 750; letter-spacing: -.5px; white-space: nowrap; }
+    .metric-note { margin-top: 5px; font-size: 11px; color: var(--muted); }
     .metric-note.good { color: var(--green); }
     .metric-note.warn { color: var(--amber); }
-    .grid-2 { display: grid; grid-template-columns: 1.45fr 1fr; gap: 18px; }
     .panel {
       border: 1px solid var(--line); border-radius: var(--radius);
       background: var(--surface); box-shadow: var(--shadow); overflow: hidden;
     }
     .panel-head {
-      padding: 18px 20px; display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
       border-bottom: 1px solid var(--line);
     }
     .panel-head h3 { margin: 0; font-size: 15px; }
-    .panel-body { padding: 20px; }
+    .panel-head p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+    .panel-body { padding: 18px; }
+    .panel + .panel { margin-top: 16px; }
     .toolbar {
-      display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
-      padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: white;
-    }
-    .search {
-      flex: 1; min-width: 190px; border: 0; outline: 0; padding: 7px 5px;
-      color: var(--ink); background: transparent;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
+      padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: white;
     }
     .filter {
-      border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+      border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
       color: var(--ink); background: #fff;
     }
     .filter-field { min-width: 200px; max-width: 260px; }
-    #contract-filter-value, #payment-filter-value { display: flex; min-width: 180px; flex: 1; }
-    #contract-filter-value .filter, #payment-filter-value .filter { width: 100%; }
-    .tree-table { width: max-content; min-width: 100%; font-size: 12px; }
-    .tree-table th, .tree-table td {
-      overflow: visible; overflow-wrap: normal; word-break: normal; white-space: nowrap;
-      text-align: left; vertical-align: middle;
-    }
-    .tree-table th {
-      text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 650;
-    }
-    .tree-table th.num, .tree-table td.cell-number { text-align: right; }
-    .tree-table th.center { text-align: center; }
-    .tree-table tr.row-contract { background: #f7f9fc; font-weight: 650; }
-    .tree-table tr.row-free { background: #fff8ec; }
-    .tree-table tr.row-spec td:first-child { padding-left: 28px; }
-    .tree-table tr.row-pay td:first-child { padding-left: 48px; }
-    .tree-table tr.row-total { background: #eef3ea; font-weight: 700; }
-    .tree-table tr.row-balance { background: #eef2fb; font-weight: 700; }
-    .panel + .panel { margin-top: 18px; }
-    .table-wrap { overflow: auto; width: 100%; }
-    table { width: 100%; border-collapse: collapse; }
-    .data-table { min-width: 2100px; table-layout: fixed; font-size: 12px; }
-    th {
-      padding: 9px 10px; text-align: center; color: #5f6b7d; background: #f3f5f8;
-      border: 1px solid #dce1e8; border-top: 0; font-size: 10px; text-transform: uppercase; letter-spacing: .35px;
-      line-height: 1.25; overflow-wrap: anywhere; white-space: normal;
-    }
-    td { padding: 9px 10px; border: 1px solid #e0e4ea; vertical-align: middle; }
-    th:first-child, td:first-child { border-left: 0; }
-    th:last-child, td:last-child { border-right: 0; }
-    tbody tr:hover { background: #fbfcff; }
-    .data-table th, .data-table td { overflow: hidden; overflow-wrap: break-word; }
-    .tree-table th, .tree-table td {
-      overflow: visible; overflow-wrap: normal; word-break: keep-all; white-space: nowrap;
-      text-align: left; vertical-align: middle; text-transform: none; letter-spacing: 0;
-    }
-    .tree-table th.num, .tree-table td.cell-number { text-align: right; }
-    .tree-table th.center { text-align: center; }
-    .data-table td { height: auto; min-height: 38px; }
-    .data-table .cell-center { text-align: center; }
-    .data-table .cell-number { text-align: right; }
-    .data-table input, .data-table select {
-      min-width: 0; padding: 7px 7px; border-radius: 6px; font-size: 12px;
-    }
-    .data-table select:disabled, .data-table input:disabled { background: #f3f5f8; color: #8b95a5; }
-    .data-table select:disabled, .data-table input:disabled { background: #f3f5f8; color: #8b95a5; }
-    .data-table .edit-row { background: #f5f8ff; }
-    .data-table .edit-row td { padding: 6px; border-color: #cbd8f5; }
-    .data-table .w-number { width: 105px; }
-    .data-table .w-date { width: 108px; }
-    .data-table .w-type { width: 105px; }
-    .data-table .w-money { width: 125px; }
-    .data-table .w-status { width: 110px; }
-    .data-table .w-actions,
-    .data-table td.actions-col {
-      width: 88px; min-width: 88px; max-width: 88px;
-      position: sticky; right: 0; z-index: 2; background: #fff;
-      box-shadow: -6px 0 8px rgba(20, 35, 60, .06);
-    }
-    .data-table th.w-actions { z-index: 3; background: #f3f5f8; }
-    .data-table .edit-row td.actions-col { background: #f5f8ff; }
-    .data-table tbody tr:hover td.actions-col { background: #fbfcff; }
-    .data-table .w-expand { width: 52px; min-width: 52px; max-width: 52px; }
-    .data-table th.w-expand,
-    .data-table td.expand-col {
-      width: 52px; min-width: 52px; max-width: 52px;
-      text-align: center; vertical-align: middle; padding: 8px 4px;
-    }
-    .data-table td.expand-col { height: auto; }
-    .expand-btn {
-      display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-      border: 1px solid var(--line); border-radius: 7px; width: 36px; height: 36px; padding: 0;
-      margin: 0 auto; color: var(--muted); background: #fff; font-size: 11px; font-weight: 650; line-height: 1;
-    }
-    .expand-btn .count { font-size: 10px; font-weight: 600; margin-top: 1px; }
-    .expand-btn:hover { color: var(--blue); border-color: #b8ccf5; background: var(--blue-soft); }
-    .expand-btn.open { color: var(--blue); border-color: #9eb8f0; background: var(--blue-soft); }
-    .expand-btn .chev { display: inline-block; transition: transform .15s ease; }
-    .expand-btn.open .chev { transform: rotate(90deg); }
-    tr.detail-row td { padding: 0; height: auto; background: #f7f9fc; border-color: #dce3ef; }
-    tr.detail-row:hover { background: #f7f9fc; }
-    .payment-detail { padding: 10px 14px 12px 48px; }
-    .payment-detail-head {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      margin-bottom: 8px; font-size: 12px; color: var(--muted);
-    }
-    .payment-subtable { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; border: 1px solid #e0e4ea; border-radius: 8px; overflow: hidden; }
-    .payment-subtable th {
-      padding: 7px 9px; font-size: 10px; background: #f3f5f8; border: 1px solid #e0e4ea; text-align: center;
-    }
-    .payment-subtable td { padding: 8px 9px; font-size: 12px; border: 1px solid #e8ebf0; height: auto; }
-    .payment-subtable .cell-number { text-align: right; }
-    .payment-empty { padding: 8px 0; font-size: 12px; color: var(--muted); }
+    .filter-value { display: flex; min-width: 180px; flex: 1; }
+    .filter-value .filter { width: 100%; }
     .search-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 160px; }
     .search-chip {
       display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 16px;
       background: #eef2f8; color: #425066; font-size: 11px;
     }
     .search-chip button { border: 0; background: transparent; color: #7a8799; cursor: pointer; padding: 0 2px; }
+
+    /* ---------- таблицы ---------- */
+    .table-wrap { overflow: auto; width: 100%; max-height: calc(100vh - var(--table-offset)); }
+    .table-wrap.tall { max-height: calc(100vh - 150px); }
+    table { border-collapse: separate; border-spacing: 0; }
+    .data-table { table-layout: fixed; font-size: 12px; }
+    th {
+      padding: 7px 8px; text-align: center; color: #5f6b7d; background: #f3f5f8;
+      border-right: 1px solid #dce1e8; border-bottom: 1px solid #dce1e8; font-size: 10px;
+      text-transform: uppercase; letter-spacing: .3px; line-height: 1.2; white-space: normal;
+      position: sticky; top: 0; z-index: 2;
+    }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--blue); }
+    td { padding: 0 8px; border-right: 1px solid #e0e4ea; border-bottom: 1px solid #e0e4ea; vertical-align: middle; }
+    th:last-child, td:last-child { border-right: 0; }
+    tbody tr:hover > td { background: #fbfcff; }
+    .data-table td {
+      height: var(--row-h); max-height: var(--row-h);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .data-table, .tree-table { min-width: 100%; }
+    .data-table td > span:not(.badge), .data-table td > div.main-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table .cell-center { text-align: center; }
+    .data-table .cell-number, th.num { text-align: right; }
+    .data-table input, .data-table select {
+      width: 100%; min-width: 0; height: 28px; padding: 2px 6px; border-radius: 6px; font-size: 12px; border: 1px solid #c9d4ea;
+    }
+    .data-table input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
+    .data-table select:disabled, .data-table input:disabled { background: #f3f5f8; color: #8b95a5; }
+    .data-table .edit-row > td { background: #f5f8ff; border-color: #cbd8f5; padding: 0 4px; }
+    .data-table td.actions-col, .data-table th.actions-col {
+      position: sticky; right: 0; z-index: 2; background: #fff; padding: 0 4px;
+      box-shadow: -6px 0 8px rgba(20, 35, 60, .06);
+    }
+    .data-table th.actions-col { z-index: 4; background: #f3f5f8; }
+    .data-table .edit-row td.actions-col { background: #f5f8ff; }
+    .data-table tbody tr:hover td.actions-col { background: #fbfcff; }
+    .data-table td.expand-col { text-align: center; padding: 0 2px; }
+    .data-table tr.row-child > td { background: #fafbfe; }
+    .data-table tr.row-child > td:first-child { box-shadow: inset 3px 0 #c7d4f0; }
+    .expand-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+      border: 1px solid var(--line); border-radius: 7px; min-width: 30px; height: 28px; padding: 0 5px;
+      color: var(--muted); background: #fff; font-size: 11px; font-weight: 650; line-height: 1;
+    }
+    .expand-btn .count { font-size: 10px; font-weight: 600; }
+    .expand-btn:hover { color: var(--blue); border-color: #b8ccf5; background: var(--blue-soft); }
+    .expand-btn.open { color: var(--blue); border-color: #9eb8f0; background: var(--blue-soft); }
+    .expand-btn .chev { display: inline-block; transition: transform .15s ease; }
+    .expand-btn.open .chev { transform: rotate(90deg); }
+    tr.detail-row > td { padding: 0; height: auto; max-height: none; white-space: normal; background: #f7f9fc; border-color: #dce3ef; }
+    tr.detail-row:hover > td { background: #f7f9fc; }
+    .payment-detail { padding: 10px 14px 12px 48px; position: sticky; left: 0; box-sizing: border-box; }
     .spec-block { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #dbe1ea; }
     .spec-block:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
-    .spec-head { font-size: 12px; margin-bottom: 6px; color: #334155; }
-    .row-spec .main-cell { font-weight: 600; color: #475569; }
-    .row-spec td:first-child + td { padding-left: 22px; }
+    .spec-head { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; color: #334155; }
+    .spec-head .spec-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .spec-actions { margin-left: auto; display: inline-flex; gap: 4px; flex: none; }
+    .day-group { margin: 4px 0; border: 1px solid #e0e4ea; border-radius: 8px; background: #fff; }
+    .day-group summary {
+      display: grid; grid-template-columns: 110px 1fr 150px 90px; gap: 10px; align-items: center;
+      padding: 7px 10px; cursor: pointer; font-size: 12px; list-style: none;
+    }
+    .day-group summary::-webkit-details-marker { display: none; }
+    .day-group summary:hover { background: #fbfcff; }
+    .day-group summary .money { text-align: right; }
+    .day-group[open] summary { border-bottom: 1px solid #e8ebf0; }
+    .payment-subtable { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    .payment-subtable th { position: static; padding: 6px 9px; font-size: 10px; background: #f8f9fb; border: 0; border-bottom: 1px solid #e8ebf0; text-align: center; }
+    .payment-subtable td { padding: 6px 9px; font-size: 12px; border: 0; border-bottom: 1px solid #f0f2f5; height: auto; max-height: none; white-space: normal; overflow: visible; }
+    .payment-subtable tr:last-child td { border-bottom: 0; }
+    .payment-subtable .cell-number { text-align: right; }
+    .payment-empty { padding: 8px 0; font-size: 12px; color: var(--muted); }
     .main-cell { font-weight: 650; }
-    .sub-cell { margin-top: 2px; color: var(--muted); font-size: 12px; max-width: 310px; }
-    .money { font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .money { font-weight: 650; font-variant-numeric: tabular-nums; }
+    .neg { color: var(--red); }
     .badge {
-      display: inline-flex; align-items: center; border-radius: 20px; padding: 4px 9px;
-      font-size: 12px; font-weight: 650; white-space: nowrap;
+      display: inline-flex; align-items: center; border-radius: 20px; padding: 3px 8px;
+      font-size: 11px; font-weight: 650; white-space: nowrap;
     }
     .badge.green { color: #087b59; background: #e5f7f1; }
     .badge.blue { color: #285ac9; background: #e9f0ff; }
     .badge.gray { color: #667287; background: #eef1f5; }
     .badge.red { color: #b63939; background: #fdeaea; }
     .badge.amber { color: #9e680b; background: #fff3d9; }
-    .progress { height: 7px; min-width: 90px; border-radius: 10px; overflow: hidden; background: #e9edf3; }
+    .progress { height: 7px; min-width: 70px; border-radius: 10px; overflow: hidden; background: #e9edf3; }
     .progress span { display: block; height: 100%; border-radius: inherit; background: var(--blue); }
     .progress.over span { background: var(--red); }
-    .row-actions { display: flex; justify-content: flex-end; gap: 4px; }
-    .table-note { padding: 9px 13px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); background: #fbfcfd; }
-    .history-meta { color: var(--muted); font-size: 12px; }
-    .history-panel { max-width: 860px; margin: 0 auto; }
-    .history-table { min-width: 0; table-layout: auto; }
-    .history-table th, .history-table td { padding: 8px 10px; }
-    .icon-btn {
-      border: 0; border-radius: 7px; padding: 6px 8px; color: var(--muted); background: transparent;
-    }
+    .row-actions { display: flex; justify-content: flex-end; gap: 2px; }
+    .icon-btn { border: 0; border-radius: 7px; padding: 5px 7px; color: var(--muted); background: transparent; }
     .icon-btn:hover { color: var(--blue); background: var(--blue-soft); }
     .icon-btn.delete:hover { color: var(--red); background: #fff0f0; }
-    .chart-row {
-      display: grid; grid-template-columns: minmax(110px, .8fr) 2fr 100px;
-      align-items: center; gap: 13px; margin: 15px 0;
-    }
-    .chart-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chart-track { height: 10px; border-radius: 9px; background: #edf0f5; overflow: hidden; }
-    .chart-bar { height: 100%; border-radius: 9px; background: linear-gradient(90deg, #366be4, #6794f6); }
-    .chart-bar.expense { background: linear-gradient(90deg, #e39c31, #f2c068); }
-    .chart-value { text-align: right; font-size: 12px; font-weight: 650; }
     .empty { padding: 42px 20px; text-align: center; color: var(--muted); }
-    .modal-backdrop {
-      position: fixed; inset: 0; z-index: 20; display: none; place-items: center; padding: 20px;
-      background: rgba(15, 25, 43, .55); backdrop-filter: blur(3px);
+    .history-panel { max-width: 860px; margin: 0 auto; }
+    .history-table { width: 100%; table-layout: auto; }
+    .history-table td { padding: 8px 10px; }
+    .history-meta { color: var(--muted); font-size: 12px; }
+
+    /* ---------- аналитика ---------- */
+    .tree-table { table-layout: fixed; font-size: 12px; }
+    .tree-table td { height: 36px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tree-table td.expand-col { padding: 0 4px; text-align: center; }
+    .tree-table tr.row-income > td { background: #eef8f3; font-weight: 650; }
+    .tree-table tr.row-expense > td { background: #fff; }
+    .tree-table tr.row-expense > td:first-child { box-shadow: inset 3px 0 #f0c674; }
+    .tree-table tr.row-spec > td { background: #fafbfe; color: #475569; }
+    .tree-table tr.row-spec > td:first-child { padding-left: 24px; box-shadow: inset 3px 0 #c7d4f0; }
+    .tree-table tr.row-pay > td { background: #fffdf7; color: #475569; }
+    .tree-table tr.row-free > td { background: #fff8ec; font-weight: 650; }
+    .tree-table tr.row-total > td { background: #eef3ea; font-weight: 700; }
+    .tree-table tr.row-balance > td { background: #eef2fb; font-weight: 700; }
+    .tree-table .name { display: inline-flex; gap: 8px; align-items: center; }
+    .dash {
+      border-radius: var(--radius); padding: 18px 22px; margin-bottom: 16px; color: #e9eef7;
+      background: linear-gradient(180deg, #2a3446, #1f2838); box-shadow: var(--shadow);
     }
-    .modal-backdrop.open { display: grid; }
-    .modal {
-      width: min(760px, 100%); max-height: 92vh; overflow: auto;
-      border-radius: 16px; background: white; box-shadow: 0 24px 70px rgba(10,20,40,.28);
-    }
-    .modal-head, .modal-foot { padding: 19px 22px; display: flex; align-items: center; justify-content: space-between; }
-    .modal-head { border-bottom: 1px solid var(--line); }
-    .modal-head h3 { margin: 0; font-size: 18px; }
-    .modal-body { padding: 22px; }
-    .modal-foot { border-top: 1px solid var(--line); justify-content: flex-end; gap: 9px; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .field.full { grid-column: 1 / -1; }
-    label { display: block; margin-bottom: 6px; color: #566176; font-size: 12px; font-weight: 650; }
+    .dash-head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-bottom: 12px; }
+    .dash-head h3 { margin: 0; font-size: 15px; color: #fff; }
+    .dash-head span { font-size: 12px; color: #9aa7bd; }
+    .dash-row { display: grid; grid-template-columns: minmax(160px, 280px) minmax(0, 1fr) 150px; gap: 12px; align-items: center; margin: 7px 0; }
+    .dash-label { text-align: right; font-size: 13px; color: #c7d0df; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash-label small { display: block; color: #8a97ad; font-size: 11px; }
+    .dash-track { position: relative; height: 34px; display: flex; align-items: center; min-width: 0; }
+    .dash-bar { height: 100%; border-radius: 3px; background: #1a8cff; min-width: 2px; max-width: 100%; transition: width .3s ease; }
+    .dash-bar.neg { background: #e05555; }
+    .dash-value { font-weight: 700; font-size: 14px; color: #fff; white-space: nowrap; }
+    .dash-value.neg { color: #ff9b9b; }
+    .dash-empty { color: #9aa7bd; font-size: 13px; }
+
+    /* ---------- справочники ---------- */
+    .dict-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .dict-list { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 330px); overflow: auto; }
+    .dict-list li { display: flex; align-items: center; gap: 8px; padding: 7px 18px; border-bottom: 1px solid #eef1f5; font-size: 13px; }
+    .dict-list li:last-child { border-bottom: 0; }
+    .dict-list li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dict-list li input { flex: 1; height: 30px; padding: 3px 8px; border-radius: 6px; }
+    .dict-add { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); background: #fbfcfd; }
+    .dict-add input { height: 34px; padding: 4px 10px; border-radius: 8px; }
+    .dict-count { font-size: 12px; color: var(--muted); }
+
     input, select, textarea {
-      width: 100%; border: 1px solid #dce1e9; border-radius: 9px; padding: 10px 11px;
+      width: 100%; border: 1px solid #dce1e9; border-radius: 9px; padding: 9px 11px;
       outline: none; color: var(--ink); background: white;
     }
     input[type="checkbox"] { width: auto; }
     input:focus, select:focus, textarea:focus { border-color: #7ca0f1; box-shadow: 0 0 0 3px #edf3ff; }
-    textarea { min-height: 75px; resize: vertical; }
     .toast {
       position: fixed; right: 24px; bottom: 24px; z-index: 40; padding: 12px 16px;
       border-radius: 10px; color: white; background: #1d2b46; box-shadow: var(--shadow);
       opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s ease;
     }
     .toast.show { opacity: 1; transform: translateY(0); }
-    @media (max-width: 1100px) {
-      .cards { grid-template-columns: repeat(2, 1fr); }
-      .grid-2 { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 1400px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 1100px) { .dict-grid { grid-template-columns: 1fr; } }
     @media (max-width: 760px) {
       .app { display: block; }
       .sidebar { position: static; width: 100%; height: auto; padding: 12px; transform: none; }
@@ -314,15 +295,12 @@
       .nav button[data-page="history"] { margin-top: 0; }
       .nav button { justify-content: center; padding: 10px 5px; }
       .nav button span:last-child { display: none; }
-      .sidebar-foot { display: none; }
       main { display: block; }
       .topbar { height: 58px; padding: 0 17px; }
-      .content { padding: 22px 15px 35px; }
+      .content { padding: 16px 12px 24px; }
       .cards { grid-template-columns: 1fr; }
       .page-head { align-items: flex-start; }
-      .toolbar { flex-wrap: wrap; }
-      .form-grid { grid-template-columns: 1fr; }
-      .field.full { grid-column: auto; }
+      .table-wrap { max-height: none; }
     }
   </style>
 </head>
@@ -336,6 +314,7 @@
       <button class="active" data-page="analytics"><span class="icon">◫</span><span>Аналитика</span></button>
       <button data-page="contracts"><span class="icon">▤</span><span>Договоры</span></button>
       <button data-page="payments"><span class="icon">₽</span><span>Платежи</span></button>
+      <button data-page="dictionaries"><span class="icon">☰</span><span>Справочники</span></button>
       <button data-page="history"><span class="icon">↶</span><span>История изменений</span></button>
     </nav>
   </aside>
@@ -356,9 +335,9 @@
         </div>
         <div class="toolbar">
           <select class="filter filter-field" id="contract-filter-field" onchange="syncFilterValue('contract')"></select>
-          <span id="contract-filter-value"></span>
+          <span class="filter-value" id="contract-filter-value"></span>
           <button type="button" class="btn" onclick="addStructuredFilter('contract')">+ фильтр</button>
-          <button type="button" class="btn" onclick="clearFilters('contract')">Сбросить фильтры</button>
+          <button type="button" class="btn" onclick="clearFilters('contract')">Сбросить</button>
           <div class="search-chips" id="contract-filter-chips"></div>
         </div>
         <div class="panel"><div class="table-wrap" id="contracts-table"></div></div>
@@ -366,14 +345,14 @@
 
       <section class="page" id="page-payments">
         <div class="page-head">
-          <div><h2>Платежи и поступления</h2><p>Фактические и плановые операции по договорам</p></div>
+          <div><h2>Платежи и поступления</h2><p>Фактические и плановые операции по договорам и без договора</p></div>
           <button class="btn primary" data-requires="edit" onclick="startPaymentRow()">+ Добавить строку</button>
         </div>
         <div class="toolbar">
           <select class="filter filter-field" id="payment-filter-field" onchange="syncFilterValue('payment')"></select>
-          <span id="payment-filter-value"></span>
+          <span class="filter-value" id="payment-filter-value"></span>
           <button type="button" class="btn" onclick="addStructuredFilter('payment')">+ фильтр</button>
-          <button type="button" class="btn" onclick="clearFilters('payment')">Сбросить фильтры</button>
+          <button type="button" class="btn" onclick="clearFilters('payment')">Сбросить</button>
           <div class="search-chips" id="payment-filter-chips"></div>
         </div>
         <div class="panel"><div class="table-wrap" id="payments-table"></div></div>
@@ -381,17 +360,33 @@
 
       <section class="page active" id="page-analytics">
         <div class="page-head">
-          <div><h2>Финансовый дашборд</h2><p>Лимиты, факт и свободный остаток по договорам и спецификациям</p></div>
+          <div><h2>Финансовый дашборд</h2><p>Доходные договоры, привязанные к ним расходы и свободный остаток</p></div>
         </div>
         <div class="cards" id="analytics-cards"></div>
+        <div class="dash" id="analytics-dash"></div>
+        <div class="toolbar">
+          <select class="filter filter-field" id="analytics-filter-field" onchange="syncFilterValue('analytics')"></select>
+          <span class="filter-value" id="analytics-filter-value"></span>
+          <button type="button" class="btn" onclick="addStructuredFilter('analytics')">+ фильтр</button>
+          <button type="button" class="btn" onclick="clearFilters('analytics')">Сбросить</button>
+          <div class="search-chips" id="analytics-filter-chips"></div>
+          <button type="button" class="btn" onclick="toggleAllAnalytics()" id="analytics-expand-all">Развернуть всё</button>
+        </div>
         <div class="panel">
-          <div class="panel-head"><h3>Договоры</h3></div>
-          <div class="table-wrap" id="analytics-tree"></div>
+          <div class="panel-head"><div><h3>Лимиты, факт и свободный остаток</h3><p>Доходный договор → расходные договоры и счета, которые он финансирует → спецификации</p></div></div>
+          <div class="table-wrap tall" id="analytics-tree"></div>
         </div>
         <div class="panel">
           <div class="panel-head"><h3>Прочие расходы</h3></div>
-          <div class="table-wrap" id="analytics-other"></div>
+          <div class="table-wrap tall" id="analytics-other"></div>
         </div>
+      </section>
+
+      <section class="page" id="page-dictionaries">
+        <div class="page-head">
+          <div><h2>Справочники</h2><p>Списки ЦФО, статей БДДС и проектов для выбора в договорах и платежах</p></div>
+        </div>
+        <div class="dict-grid" id="dictionaries-grid"></div>
       </section>
 
       <section class="page" id="page-history">
@@ -409,27 +404,27 @@
     </div>
   </main>
 </div>
-
-<div class="modal-backdrop" id="modal-backdrop">
-  <div class="modal">
-    <div class="modal-head"><h3 id="modal-title"></h3><button class="icon-btn" onclick="closeModal()">✕</button></div>
-    <form id="entity-form">
-      <div class="modal-body" id="modal-body"></div>
-      <div class="modal-foot"><button type="button" class="btn" onclick="closeModal()">Отмена</button><button class="btn primary">Сохранить</button></div>
-    </form>
-  </div>
-</div>
 <div class="toast" id="toast"></div>
+<div id="datalists"></div>
 
 <script>
   const rub = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
   const dateFmt = new Intl.DateTimeFormat('ru-RU');
-  let state = { contracts: [], payments: [], specifications: [], history: [], me: null };
-  let formContext = null;
+  let state = { contracts: [], payments: [], dictionaries: [], history: [], me: null };
   let editing = null;
   const expandedContracts = new Set();
-  const activeFilters = { contract: [], payment: [] };
+  const expandedAnalytics = new Set();
+  let analyticsAllOpen = false;
+  const activeFilters = { contract: [], payment: [], analytics: [] };
+  let paymentSort = { field: 'approvalDate', dir: -1 };
   const VAT_RATES = [0, 5, 7, 10, 20, 22];
+  const DEFAULT_VAT = 22;
+  const DICT_KINDS = [['cfo', 'ЦФО'], ['bdds', 'Статьи БДДС'], ['project', 'Проекты']];
+  const CONTRACT_DOC = [['contract', 'Договор'], ['invoice', 'Счёт'], ['none', 'Без счета, договора']];
+  const PAYMENT_DOC = [['contract', 'Счет по договору'], ['invoice', 'Счет без договора'], ['none', 'Без договора и без счета']];
+  const PAY_TYPES = [['income', 'Поступление'], ['expense', 'Списание']];
+  const CATEGORIES = [['limit', 'Лимит'], ['specification', 'Спецификация'], ['request', 'Заявка'], ['addendum', 'Доп. соглашение']];
+
   const FILTER_DEFS = {
     contract: [
       {id:'number', label:'Номер договора'},
@@ -442,23 +437,35 @@
       {id:'project', label:'Проект'},
       {id:'responsible', label:'ФИО ответственного'},
       {id:'comment', label:'Комментарий'},
-      {id:'documentKind', label:'Вид документа', type:'select', options:[['contract','Договор'],['invoice','Счёт'],['none','Без счета, договора']]},
+      {id:'documentKind', label:'Вид документа', type:'select', options:CONTRACT_DOC},
       {id:'direction', label:'Вид договора', type:'select', options:[['income','Доходный'],['expense','Расходный']]},
       {id:'kind', label:'Рамочный / нерамочный', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]},
-      {id:'category', label:'Категория', type:'select', options:[['limit','Лимит'],['specification','Спецификация'],['request','Заявка'],['addendum','Доп. соглашение']]},
-      {id:'startDate', label:'Дата начала', type:'date'},
-      {id:'endDate', label:'Дата окончания', type:'date'}
+      {id:'category', label:'Категория', type:'select', options:CATEGORIES},
+      {id:'parentNumber', label:'Договор-основание'}
     ],
     payment: [
       {id:'documentCard', label:'Карта документа'},
       {id:'number', label:'Номер документа'},
+      {id:'contractNumber', label:'Номер договора'},
       {id:'approvalDate', label:'Дата согласования', type:'date'},
       {id:'paymentDate', label:'Дата оплаты', type:'date'},
       {id:'counterparty', label:'Контрагент'},
+      {id:'fundingSource', label:'Источник финансирования'},
+      {id:'documentKind', label:'Вид', type:'select', options:PAYMENT_DOC},
+      {id:'type', label:'Вид платежа', type:'select', options:PAY_TYPES},
       {id:'bdds', label:'Статья БДДС'},
       {id:'cfo', label:'ЦФО'},
       {id:'paymentKind', label:'Вид оплаты', type:'select', options:[['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']]},
       {id:'responsible', label:'ФИО ответственного'}
+    ],
+    analytics: [
+      {id:'any', label:'Любое поле'},
+      {id:'number', label:'Номер договора'},
+      {id:'counterparty', label:'Контрагент'},
+      {id:'project', label:'Проект'},
+      {id:'subject', label:'Предмет'},
+      {id:'direction', label:'Тип', type:'select', options:[['income','Доходный'],['expense','Расходный']]},
+      {id:'kind', label:'Рамочный / нерамочный', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]}
     ]
   };
 
@@ -470,13 +477,20 @@
     contract: 'Договор', invoice: 'Счёт', none: 'Без счета, договора',
     limit: 'Лимит', specification: 'Спецификация', request: 'Заявка', addendum: 'Доп. соглашение'
   };
+  const payDocLabel = Object.fromEntries(PAYMENT_DOC);
+  const payTypeLabel = Object.fromEntries(PAY_TYPES);
 
+  /* ---------- утилиты ---------- */
   function esc(value = '') {
-    return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+    return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
   }
   function cellText(value) {
     const text = value == null || value === '' ? '—' : String(value);
     return `<span title="${esc(text)}">${esc(text)}</span>`;
+  }
+  function moneyCell(value, cls = '') {
+    const num = Number(value) || 0;
+    return `<td class="money cell-number ${cls} ${num < 0 ? 'neg' : ''}" title="${esc(money(num))}">${money(num)}</td>`;
   }
   function rejectRow(message) { toast(message); return false; }
   function validateRegistryFields(values) {
@@ -507,56 +521,102 @@
     return dateFmt.format(date);
   }
   function uid(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
-  function contractById(id) { return state.contracts.find(c => c.id === id); }
-  function specsForContract(contractId) {
-    return (state.specifications || []).filter(s => s.contractId === contractId);
+  function optionTags(pairs, current) {
+    return pairs.map(([value, label]) => `<option value="${esc(value)}" ${String(current) === String(value) ? 'selected' : ''}>${esc(label)}</option>`).join('');
   }
-  function specById(id) { return (state.specifications || []).find(s => s.id === id); }
-  function completedPayments(contractId, specificationId = '') {
-    return state.payments.filter(p =>
-      p.contractId === contractId &&
-      p.status === 'paid' &&
-      (specificationId ? p.specificationId === specificationId : true)
-    ).reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  }
-  function specPayRemainder(spec) {
-    if (spec.payRemainder != null) return Number(spec.payRemainder);
-    return Number(spec.amount || 0) - completedPayments(spec.contractId, spec.id);
-  }
-  function contractLimitRemainder(contract) {
-    if (Object.prototype.hasOwnProperty.call(contract, 'limitRemainder')) return contract.limitRemainder == null ? null : Number(contract.limitRemainder);
-    if (contract.kind !== 'framework') return null;
-    const specSum = specsForContract(contract.id).reduce((s, x) => s + Number(x.amount || 0), 0);
-    return Number(contract.amount || 0) - specSum;
-  }
-  function contractPayRemainder(contract) {
-    if (contract.payRemainder != null) return Number(contract.payRemainder);
-    return Number(contract.amount || 0) - completedPayments(contract.id);
-  }
-  function contractBalance(contract) { return contractPayRemainder(contract); }
   function amountWithoutVat(amount, vatRate) {
     const amt = Number(amount) || 0;
     const vr = Number(vatRate) || 0;
     return vr ? Math.round(amt / (1 + vr / 100) * 100) / 100 : amt;
   }
-  function optionTags(pairs, current) {
-    return pairs.map(([value, label]) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`).join('');
-  }
   function vatSum(amount, vatRate) {
     const gross = Number(amount) || 0;
     return Math.round((gross - amountWithoutVat(gross, vatRate)) * 100) / 100;
   }
+  function colgroup(cols) {
+    return `<colgroup>${cols.map(c => `<col style="width:${c.w}px">`).join('')}</colgroup>`;
+  }
+  function tableWidth(cols) { return cols.reduce((s, c) => s + c.w, 0); }
+  function headRow(cols, decorate = () => ({})) {
+    return `<thead><tr>${cols.map(c => {
+      const d = decorate(c) || {};
+      return `<th class="${c.cls || ''} ${d.cls || ''}" ${d.attrs || ''}>${c.label}${d.suffix || ''}</th>`;
+    }).join('')}</tr></thead>`;
+  }
+
+  /* ---------- модель ---------- */
+  function contractById(id) { return state.contracts.find(c => c.id === id); }
+  function childrenOf(contractId) { return state.contracts.filter(c => c.parentContractId === contractId); }
+  function isTop(c) { return !c.parentContractId; }
+  function contractLabel(c, withCounterparty = false) {
+    if (!c) return '—';
+    const parent = c.parentContractId ? contractById(c.parentContractId) : null;
+    const base = parent ? `№ ${parent.number} / ${labels[c.category] || ''} ${c.number}` : `№ ${c.number}`;
+    return withCounterparty && c.counterparty ? `${base} · ${c.counterparty}` : base;
+  }
+  function ownPaid(contractId) {
+    return state.payments.filter(p => p.contractId === contractId && p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0);
+  }
+  function contractFact(c) {
+    if (c.paidTotal != null) return Number(c.paidTotal);
+    return ownPaid(c.id) + childrenOf(c.id).reduce((s, x) => s + ownPaid(x.id), 0);
+  }
+  function contractLimitRemainder(c) {
+    if (Object.prototype.hasOwnProperty.call(c, 'limitRemainder')) return c.limitRemainder == null ? null : Number(c.limitRemainder);
+    if (c.kind !== 'framework') return null;
+    return Number(c.amount || 0) - childrenOf(c.id).reduce((s, x) => s + Number(x.amount || 0), 0);
+  }
+  function contractPayRemainder(c) {
+    if (c.payRemainder != null) return Number(c.payRemainder);
+    return Number(c.amount || 0) - contractFact(c);
+  }
+  function incomeContracts() { return state.contracts.filter(c => isTop(c) && c.direction === 'income' && !c.otherExpense); }
+  function isExpenseSide(c) { return isTop(c) && c.direction !== 'income'; }
+  function fundedContracts(incomeId) { return state.contracts.filter(c => isExpenseSide(c) && c.fundingContractId === incomeId); }
+  function freePayments(incomeId) {
+    return state.payments.filter(p => !p.contractId && (incomeId === undefined ? true : (p.fundingContractId || '') === incomeId));
+  }
+  function sumAmount(list) { return list.reduce((s, x) => s + Number(x.amount || 0), 0); }
+  function sumPaid(list) { return list.filter(p => p.status === 'paid').reduce((s, x) => s + Number(x.amount || 0), 0); }
+  function contracted(income) { return sumAmount(fundedContracts(income.id)) + sumAmount(freePayments(income.id)); }
+  function contractedFact(income) { return fundedContracts(income.id).reduce((s, c) => s + contractFact(c), 0) + sumPaid(freePayments(income.id)); }
+  function fundingLabel(id) {
+    const c = id ? contractById(id) : null;
+    return c ? `№ ${c.number} · ${c.counterparty}` : '';
+  }
+  function dictValues(kind) {
+    return state.dictionaries.filter(d => d.kind === kind).map(d => d.value).sort((a, b) => a.localeCompare(b, 'ru'));
+  }
+  function dictSelect(name, kind, current, extra = '') {
+    const values = dictValues(kind);
+    const list = current && !values.includes(current) ? [current, ...values] : values;
+    return `<select name="${name}" ${extra}><option value="">—</option>${list.map(v => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
+  }
+  function paymentsForContract(contractId) {
+    return state.payments.filter(p => p.contractId === contractId)
+      .sort((a, b) => String(b.paymentDate || b.date).localeCompare(String(a.paymentDate || a.date)));
+  }
+
+  /* ---------- фильтры ---------- */
   function contractField(c, id) {
     if (id === 'reviewDate') return c.reviewDate || c.date || '';
     if (id === 'registrationDate') return c.registrationDate || c.date || '';
+    if (id === 'fundingSource') return fundingLabel(c.fundingContractId) || c.fundingSource || '';
+    if (id === 'parentNumber') return contractById(c.parentContractId)?.number || '';
     return c[id] || '';
   }
   function paymentField(p, id) {
-    if (id === 'counterparty') return contractById(p.contractId)?.counterparty || '';
+    if (id === 'counterparty') return p.counterparty || contractById(p.contractId)?.counterparty || '';
+    if (id === 'contractNumber') return contractById(p.contractId)?.number || '';
+    if (id === 'fundingSource') return fundingLabel(p.fundingContractId || contractById(p.contractId)?.fundingContractId);
     if (id === 'approvalDate') return p.approvalDate || p.date || '';
     if (id === 'paymentDate') return p.paymentDate || p.date || '';
     if (id === 'paymentKind') return p.paymentKind === 'stage' ? 'gu' : (p.paymentKind || '');
     return p[id] || '';
+  }
+  function analyticsField(c, id) {
+    if (id === 'any') return [c.number, c.counterparty, c.project, c.subject, c.comment, labels[c.direction], labels[c.kind]].filter(Boolean).join(' ');
+    return c[id] || '';
   }
   function rowMatches(entity, filters, getter) {
     return filters.every(filter => {
@@ -565,6 +625,11 @@
       if (filter.type === 'select') return raw === filter.value;
       return raw.toLowerCase().includes(filter.value.toLowerCase());
     });
+  }
+  function rerender(kind) {
+    if (kind === 'contract') renderContracts();
+    else if (kind === 'payment') renderPayments();
+    else renderAnalytics();
   }
   function syncFilterValue(kind) {
     const fieldId = document.getElementById(`${kind}-filter-field`).value;
@@ -583,11 +648,7 @@
       `<span class="search-chip">${esc(filter.title)}<button type="button" onclick="removeStructuredFilter('${kind}',${index})">×</button></span>`
     ).join('');
   }
-  function clearFilters(kind) {
-    activeFilters[kind] = [];
-    renderFilterChips(kind);
-    kind === 'contract' ? renderContracts() : renderPayments();
-  }
+  function clearFilters(kind) { activeFilters[kind] = []; renderFilterChips(kind); rerender(kind); }
   function addStructuredFilter(kind) {
     if (activeFilters[kind].length >= 10) { toast('Не больше 10 фильтров'); return; }
     const fieldId = document.getElementById(`${kind}-filter-field`).value;
@@ -599,15 +660,11 @@
     activeFilters[kind].push({field: fieldId, value, type: field.type || 'text', title: `${field.label}: ${shown}`});
     if (input.tagName === 'INPUT' && input.type !== 'date') input.value = '';
     renderFilterChips(kind);
-    kind === 'contract' ? renderContracts() : renderPayments();
+    rerender(kind);
   }
-  function removeStructuredFilter(kind, index) {
-    activeFilters[kind].splice(index, 1);
-    renderFilterChips(kind);
-    kind === 'contract' ? renderContracts() : renderPayments();
-  }
+  function removeStructuredFilter(kind, index) { activeFilters[kind].splice(index, 1); renderFilterChips(kind); rerender(kind); }
   function initFilters() {
-    ['contract', 'payment'].forEach(kind => {
+    Object.keys(FILTER_DEFS).forEach(kind => {
       document.getElementById(`${kind}-filter-field`).innerHTML = FILTER_DEFS[kind].map(field => `<option value="${field.id}">${field.label}</option>`).join('');
       syncFilterValue(kind);
     });
@@ -617,6 +674,7 @@
     return `<span class="badge ${colors[status] || 'gray'}">${labels[status] || status}</span>`;
   }
 
+  /* ---------- доступ и API ---------- */
   function canEdit() { return !!(state.me && state.me.canEdit); }
   function applyAccess() {
     const edit = canEdit();
@@ -632,10 +690,7 @@
     if (options.body) headers['Content-Type'] = 'application/json';
     if (method !== 'GET' && method !== 'HEAD' && state.me) headers['X-CSRF-Token'] = state.me.csrf;
     const response = await fetch(url, Object.assign({}, options, {credentials: 'same-origin', headers}));
-    if (response.status === 401) {
-      location.href = '/login';
-      throw new Error('auth');
-    }
+    if (response.status === 401) { location.href = '/login'; throw new Error('auth'); }
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const detail = typeof err.detail === 'string' ? err.detail : '';
@@ -665,12 +720,12 @@
         if (!response.ok) throw new Error('load');
         return response.json();
       };
-      const [contracts, specifications, payments] = await Promise.all([
-        read('/api/contracts'), read('/api/specifications'), read('/api/payments')
+      const [contracts, payments, dictionaries] = await Promise.all([
+        read('/api/contracts'), read('/api/payments'), read('/api/dictionaries')
       ]);
       let history = [];
       if (me.canAudit) history = await read('/api/audit');
-      state = {me, contracts, specifications, payments, history};
+      state = {me, contracts, payments, dictionaries, history};
       applyAccess();
       renderAll();
       document.getElementById('sync-text').textContent = me.username;
@@ -689,7 +744,6 @@
       if (!error || error.message !== 'auth') location.href = '/login';
     }
   }
-
   function toggleSidebar() {
     const hidden = document.querySelector('.app').classList.toggle('sidebar-hidden');
     const button = document.getElementById('sidebar-toggle');
@@ -699,40 +753,43 @@
   function navigate(page) {
     document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.id === `page-${page}`));
     document.querySelectorAll('.nav button').forEach(el => el.classList.toggle('active', el.dataset.page === page));
-    const names = {contracts:'Договоры', payments:'Платежи', analytics:'Аналитика', history:'История изменений'};
+    const names = {contracts:'Договоры', payments:'Платежи', analytics:'Аналитика', dictionaries:'Справочники', history:'История изменений'};
     document.getElementById('top-title').textContent = names[page];
   }
   document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
 
-  function totals() {
-    const active = state.contracts.filter(c => c.status === 'active');
-    const incomeLimit = active.filter(c => c.direction === 'income').reduce((s,c) => s + Number(c.amount), 0);
-    const expenseLimit = active.filter(c => c.direction === 'expense').reduce((s,c) => s + Number(c.amount), 0);
-    const paid = state.payments.filter(p => p.status === 'paid');
-    const incomeFact = paid.filter(p => p.type === 'income').reduce((s,p) => s + Number(p.amount), 0);
-    const expenseFact = paid.filter(p => p.type === 'expense').reduce((s,p) => s + Number(p.amount), 0);
-    return { active, incomeLimit, expenseLimit, incomeFact, expenseFact };
-  }
-  function metric(label, value, note, noteClass = '') {
-    return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note ${noteClass}">${note}</div></div>`;
-  }
-  function paymentsForContract(contractId, specificationId = '') {
-    return state.payments.filter(p =>
-      p.contractId === contractId && (specificationId ? p.specificationId === specificationId : true)
-    ).sort((a, b) => b.date.localeCompare(a.date));
-  }
-  function paymentsMiniTable(payments) {
+  /* ---------- раскрытие договора: платежи по дням ---------- */
+  function paymentsByDay(payments) {
     if (!payments.length) return '<div class="payment-empty">Операций нет</div>';
-    return `<table class="payment-subtable"><thead><tr>
-      <th>№ / дата</th><th>Вид</th><th>Сумма</th><th>Статус</th><th>Комментарий</th><th></th>
-      </tr></thead><tbody>${payments.map(p => `<tr>
-        <td><div class="main-cell">${esc(p.number)}</div><div class="sub-cell">${showDate(p.paymentDate || p.date)}</div></td>
-        <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Пост.' : 'Плат.'}</span></td>
-        <td class="money cell-number">${money(p.amount)}</td>
-        <td class="cell-center">${statusBadge(p.status)}</td>
-        <td>${esc(p.comment || '—')}</td>
-        <td class="cell-center">${canEdit() ? `<button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button>` : ''}</td>
-      </tr>`).join('')}</tbody></table>`;
+    const groups = new Map();
+    payments.forEach(p => {
+      const key = String(p.paymentDate || p.date || '').slice(0, 10);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(p);
+    });
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([day, list]) => {
+      const total = sumAmount(list);
+      const paid = sumPaid(list);
+      const numbers = list.map(p => p.number).join(', ');
+      return `<details class="day-group">
+        <summary>
+          <strong>${showDate(day)}</strong>
+          <span title="${esc(numbers)}">${list.length} опер.: ${esc(numbers)}</span>
+          <span class="money">${money(total)}</span>
+          <span>${paid === total ? '<span class="badge green">Исполнено</span>' : `<span class="badge blue">исп. ${money(paid)}</span>`}</span>
+        </summary>
+        <table class="payment-subtable"><thead><tr>
+          <th style="width:110px">№</th><th style="width:90px">Вид</th><th style="width:130px">Сумма</th><th style="width:110px">Статус</th><th>Комментарий</th><th style="width:40px"></th>
+        </tr></thead><tbody>${list.map(p => `<tr>
+          <td><strong>${esc(p.number)}</strong></td>
+          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Пост.' : 'Спис.'}</span></td>
+          <td class="money cell-number">${money(p.amount)}</td>
+          <td class="cell-center">${statusBadge(p.status)}</td>
+          <td>${esc(p.comment || '—')}</td>
+          <td class="cell-center">${canEdit() ? `<button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button>` : ''}</td>
+        </tr>`).join('')}</tbody></table>
+      </details>`;
+    }).join('');
   }
   function toggleContractExpand(contractId) {
     if (expandedContracts.has(contractId)) expandedContracts.delete(contractId);
@@ -740,202 +797,363 @@
     renderContracts();
   }
   function contractDetailBlock(c) {
-    const specs = specsForContract(c.id);
-    if (c.kind === 'framework' && specs.length) {
-      const loose = paymentsForContract(c.id).filter(p => !p.specificationId);
-      return `<div class="payment-detail">${specs.map(s => {
-        const remain = specPayRemainder(s);
-        return `<div class="spec-block"><div class="spec-head"><strong>Спецификация ${esc(s.number)}</strong> · ${esc(s.subject)} · лимит ${money(s.amount)} · <span style="color:${remain < 0 ? 'var(--red)' : 'inherit'}">остаток оплат: ${money(remain)}</span></div>${paymentsMiniTable(paymentsForContract(c.id, s.id))}</div>`;
-      }).join('')}${loose.length ? `<div class="spec-block"><div class="spec-head">Платежи вне спецификации</div>${paymentsMiniTable(loose)}</div>` : ''}</div>`;
-    }
-    return `<div class="payment-detail">${paymentsMiniTable(paymentsForContract(c.id))}</div>`;
+    const kids = childrenOf(c.id);
+    const own = paymentsForContract(c.id);
+    const width = Math.max(640, (document.getElementById('contracts-table').clientWidth || 1200) - 8);
+    const box = `<div class="payment-detail" style="width:${width}px">`;
+    const shown = kids.filter(s => !(editing?.type === 'contract' && !editing.isNew && editing.id === s.id));
+    if (!shown.length) return `${box}${paymentsByDay(own)}</div>`;
+    const actions = s => canEdit() ? `<span class="spec-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${s.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${s.id}')">⌫</button></span>` : '';
+    return `${box}${shown.map(s => {
+      const remain = contractPayRemainder(s);
+      return `<div class="spec-block"><div class="spec-head"><span class="spec-title"><strong>${labels[s.category] || 'Спецификация'} ${esc(s.number)}</strong> · ${esc(s.subject)} · лимит ${money(s.amount)} · <span class="${remain < 0 ? 'neg' : ''}">остаток оплат: ${money(remain)}</span></span>${actions(s)}</div>${paymentsByDay(paymentsForContract(s.id))}</div>`;
+    }).join('')}<div class="spec-block"><div class="spec-head"><span class="spec-title"><strong>Платежи по договору вне спецификаций</strong></span></div>${paymentsByDay(own)}</div></div>`;
   }
 
-  function filteredContracts() {
-    return state.contracts.filter(c => rowMatches(c, activeFilters.contract, contractField));
+  /* ---------- договоры ---------- */
+  const CONTRACT_COLS = [
+    {label:'', w:44, cls:'expand-col'},
+    {label:'Номер договора', w:120},
+    {label:'Карта документа', w:110},
+    {label:'Рассмотр.', w:100},
+    {label:'Регистр.', w:100},
+    {label:'Контрагент', w:220},
+    {label:'Вид', w:100},
+    {label:'Предмет', w:260},
+    {label:'Сумма с НДС', w:130, cls:'num'},
+    {label:'НДС', w:64},
+    {label:'Без НДС', w:130, cls:'num'},
+    {label:'Источник финансирования', w:210},
+    {label:'Проект', w:170},
+    {label:'Ответств.', w:150},
+    {label:'Вид док.', w:110},
+    {label:'Подвид', w:105},
+    {label:'Категория', w:120},
+    {label:'Договор-основание', w:150},
+    {label:'Прочие расх.', w:74},
+    {label:'Ост. лимита', w:130, cls:'num'},
+    {label:'Ост. оплат', w:130, cls:'num'},
+    {label:'Коммент.', w:260},
+    {label:'', w:88, cls:'actions-col'}
+  ];
+  function orderedContracts(list) {
+    const set = new Set(list.map(c => c.id));
+    const tops = list.filter(c => isTop(c) || !set.has(c.parentContractId));
+    const out = [];
+    tops.forEach(c => {
+      out.push(c);
+      childrenOf(c.id).filter(k => set.has(k.id)).forEach(k => out.push(k));
+    });
+    return out;
+  }
+  function topContracts() {
+    const matched = state.contracts.filter(c => rowMatches(c, activeFilters.contract, contractField));
+    const ids = new Set(matched.map(c => c.id));
+    matched.forEach(c => { if (c.parentContractId) ids.add(c.parentContractId); });
+    if (editing?.type === 'contract' && !editing.isNew) {
+      const current = contractById(editing.id);
+      if (current) {
+        ids.add(current.id);
+        if (current.parentContractId) ids.add(current.parentContractId);
+      }
+    }
+    const openParents = new Set();
+    if (activeFilters.contract.length) matched.forEach(c => { if (c.parentContractId) openParents.add(c.parentContractId); });
+    const rows = state.contracts.filter(c => ids.has(c.id) && (!c.parentContractId || !contractById(c.parentContractId)));
+    return {rows, openParents};
   }
   function renderContracts() {
-    const rows = filteredContracts();
+    const {rows, openParents} = topContracts();
     const editItem = editing?.type === 'contract'
-      ? (editing.isNew ? {id:'new', direction:'expense', kind:'fixed', documentKind:'contract', category:'limit', vatRate:20, status:'active'} : state.contracts.find(c => c.id === editing.id))
+      ? (editing.isNew ? {id:'new', direction:'expense', kind:'fixed', documentKind:'contract', category:'limit', vatRate:DEFAULT_VAT, status:'active'} : contractById(editing.id))
       : null;
-    const colSpan = 23;
+    const colSpan = CONTRACT_COLS.length;
     const body = `${editItem && editing.isNew ? contractEditRow(editItem) : ''}${rows.map(c => {
         if (editItem && c.id === editing.id) return contractEditRow(c);
         const limitRem = contractLimitRemainder(c);
         const payRem = contractPayRemainder(c);
         const wovat = c.amountWithoutVat ?? amountWithoutVat(c.amount, c.vatRate);
-        const childCount = paymentsForContract(c.id).length + specsForContract(c.id).length;
-        const open = expandedContracts.has(c.id);
+        const kids = childrenOf(c.id);
+        const childCount = paymentsForContract(c.id).length + kids.length;
+        const editingChild = editItem && !editing.isNew && editItem.parentContractId === c.id;
+        const open = expandedContracts.has(c.id) || openParents.has(c.id) || editingChild;
         return `<tr>
           <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="Спецификации и платежи"><span class="chev">▸</span>${childCount ? `<span class="count">${childCount}</span>` : ''}</button></td>
-          <td><div class="main-cell">${cellText(c.number ? '№ ' + c.number : '')}</div></td>
+          <td><div class="main-cell" title="${esc(c.number)}">№ ${esc(c.number)}</div></td>
           <td>${cellText(c.documentCard)}</td>
           <td>${showDate(c.reviewDate || c.date)}</td>
           <td>${showDate(c.registrationDate || c.date)}</td>
-          <td><div class="main-cell">${cellText(c.counterparty)}</div></td>
+          <td><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
+          <td class="cell-center">${c.direction ? `<span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span>` : '—'}</td>
           <td>${cellText(c.subject)}</td>
-          <td class="money cell-number" title="${esc(money(c.amount))}">${money(c.amount)}</td>
+          ${moneyCell(c.amount)}
           <td class="cell-center">${c.vatRate ? c.vatRate + '%' : '—'}</td>
-          <td class="money cell-number" title="${esc(money(wovat))}">${money(wovat)}</td>
-          <td>${cellText(c.fundingSource)}</td>
+          ${moneyCell(wovat)}
+          <td>${cellText(fundingLabel(c.fundingContractId) || c.fundingSource)}</td>
           <td>${cellText(c.project)}</td>
           <td>${cellText(c.responsible)}</td>
-          <td>${cellText(c.comment)}</td>
           <td class="cell-center">${labels[c.documentKind] || '—'}</td>
-          <td class="cell-center">${c.direction ? `<span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span>` : '—'}</td>
           <td class="cell-center">${labels[c.kind] || '—'}</td>
           <td class="cell-center">${labels[c.category] || '—'}</td>
-          <td>${showDate(c.startDate)}</td>
-          <td>${showDate(c.endDate)}</td>
-          <td class="money cell-number" title="${esc(limitRem === null ? '—' : money(limitRem))}">${limitRem === null ? '—' : money(limitRem)}</td>
-          <td class="money cell-number" title="${esc(money(payRem))}" style="color:${payRem < 0 ? 'var(--red)' : ''}">${money(payRem)}</td>
+          <td>—</td>
+          <td class="cell-center">${c.otherExpense ? 'да' : '—'}</td>
+          ${limitRem === null ? '<td class="cell-number">—</td>' : moneyCell(limitRem)}
+          ${moneyCell(payRem)}
+          <td>${cellText(c.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${c.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${c.id}')">⌫</button></div>` : ''}</td>
-        </tr>${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
+        </tr>${editingChild ? contractEditRow(editItem) : ''}${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
       }).join('')}`;
-    document.getElementById('contracts-table').innerHTML = body ? `<table class="data-table"><thead><tr>
-      <th class="w-expand"></th><th class="w-number">Номер договора</th><th>Карта документа</th><th class="w-date">Рассмотр.</th><th class="w-date">Регистр.</th>
-      <th>Контрагент</th><th>Предмет</th><th class="w-money">Сумма с НДС</th><th>НДС</th><th class="w-money">Без НДС</th>
-      <th>Источник</th><th>Проект</th><th>Ответств.</th><th>Коммент.</th><th>Вид док.</th>
-      <th class="w-type">Вид</th><th class="w-type">Подвид</th><th>Категория</th>
-      <th class="w-date">Начало</th><th class="w-date">Оконч.</th><th class="w-money">Ост. лимита</th><th class="w-money">Ост. оплат</th><th class="w-actions"></th>
-      </tr></thead><tbody>${body}</tbody></table>` : '<div class="empty">Ничего не найдено</div>';
+    document.getElementById('contracts-table').innerHTML = body
+      ? `<table class="data-table" style="width:${tableWidth(CONTRACT_COLS)}px">${colgroup(CONTRACT_COLS)}${headRow(CONTRACT_COLS)}<tbody>${body}</tbody></table>`
+      : '<div class="empty">Ничего не найдено</div>';
     applyContractFieldRules();
   }
-
-  function categoryOptions(documentKind, kind) {
-    if (documentKind === 'invoice' || documentKind === 'none') return [['limit', 'Лимит']];
-    if (kind === 'fixed') return [['limit', 'Лимит'], ['addendum', 'Доп. соглашение']];
-    return [['limit', 'Лимит'], ['specification', 'Спецификация'], ['request', 'Заявка'], ['addendum', 'Доп. соглашение']];
+  function parentOptions(category, selfId) {
+    return state.contracts
+      .filter(c => isTop(c) && c.documentKind === 'contract' && c.id !== selfId)
+      .filter(c => category === 'addendum' ? true : c.kind === 'framework')
+      .map(c => [c.id, `№ ${c.number} · ${c.counterparty}`]);
+  }
+  function fundingOptions() {
+    return [['', '—'], ...incomeContracts().map(c => [c.id, `№ ${c.number} · ${c.counterparty}`])];
   }
   function applyContractFieldRules() {
     const row = document.getElementById('contract-edit-row');
     if (!row) return;
-    const documentKind = row.querySelector('[name=documentKind]').value;
+    const documentKind = row.querySelector('[name=documentKind]');
     const direction = row.querySelector('[name=direction]');
     const kind = row.querySelector('[name=kind]');
     const category = row.querySelector('[name=category]');
-    const start = row.querySelector('[name=startDate]');
-    const end = row.querySelector('[name=endDate]');
-    const locked = documentKind === 'invoice' || documentKind === 'none';
-    if (locked) {
-      direction.innerHTML = '<option value="">—</option>';
-      kind.innerHTML = '<option value="">—</option>';
-      direction.disabled = true;
-      kind.disabled = true;
-      start.disabled = true;
-      end.disabled = true;
-      start.value = '';
-      end.value = '';
-    } else {
-      const directionValue = direction.value === 'income' ? 'income' : 'expense';
-      const kindValue = kind.value === 'framework' ? 'framework' : 'fixed';
-      direction.disabled = false;
-      kind.disabled = false;
-      start.disabled = false;
-      end.disabled = false;
-      direction.innerHTML = optionTags([['income', 'Доходный'], ['expense', 'Расходный']], directionValue);
-      kind.innerHTML = optionTags([['fixed', 'Нерамочный'], ['framework', 'Рамочный']], kindValue);
-    }
-    const options = categoryOptions(documentKind, kind.value);
-    const stored = category.dataset.current || category.value;
-    category.dataset.current = '';
-    const current = options.some(option => option[0] === stored) ? stored : options[0][0];
-    category.innerHTML = optionTags(options, current);
-  }
+    const parent = row.querySelector('[name=parentContractId]');
+    const other = row.querySelector('[name=otherExpense]');
+    const funding = row.querySelector('[name=fundingContractId]');
+    const isChild = category.value !== 'limit';
+    const selfId = editing?.isNew ? '' : editing?.id;
 
+    if (isChild) {
+      documentKind.value = 'contract';
+      documentKind.disabled = true;
+      const current = parent.dataset.current || parent.value;
+      const options = parentOptions(category.value, selfId);
+      parent.innerHTML = `<option value="">Выберите договор</option>${optionTags(options, current)}`;
+      parent.disabled = false;
+      parent.required = true;
+      parent.dataset.current = '';
+      const chosen = contractById(parent.value);
+      if (chosen) {
+        direction.innerHTML = optionTags([['income', 'Доходный'], ['expense', 'Расходный']], chosen.direction || 'expense');
+        direction.disabled = true;
+        funding.innerHTML = optionTags(fundingOptions(), chosen.fundingContractId || '');
+        funding.disabled = true;
+      } else {
+        direction.disabled = false;
+        funding.disabled = false;
+      }
+      kind.innerHTML = optionTags([['fixed', 'Нерамочный'], ['framework', 'Рамочный']], kind.value === 'framework' ? 'framework' : 'fixed');
+      kind.disabled = false;
+    } else {
+      documentKind.disabled = false;
+      parent.innerHTML = '<option value="">—</option>';
+      parent.disabled = true;
+      parent.required = false;
+      const locked = documentKind.value === 'invoice' || documentKind.value === 'none';
+      if (locked) {
+        direction.innerHTML = '<option value="">—</option>';
+        kind.innerHTML = '<option value="">—</option>';
+        direction.disabled = true;
+        kind.disabled = true;
+      } else {
+        direction.innerHTML = optionTags([['income', 'Доходный'], ['expense', 'Расходный']], direction.value === 'income' ? 'income' : 'expense');
+        kind.innerHTML = optionTags([['fixed', 'Нерамочный'], ['framework', 'Рамочный']], kind.value === 'framework' ? 'framework' : 'fixed');
+        direction.disabled = false;
+        kind.disabled = false;
+      }
+      funding.disabled = false;
+    }
+    const categoryOptions = (documentKind.value === 'invoice' || documentKind.value === 'none') && !isChild ? [['limit', 'Лимит']] : CATEGORIES;
+    const storedCategory = category.value;
+    category.innerHTML = optionTags(categoryOptions, categoryOptions.some(o => o[0] === storedCategory) ? storedCategory : 'limit');
+    const expense = direction.value === 'expense';
+    other.disabled = !expense;
+    if (!expense) other.checked = false;
+    funding.disabled = funding.disabled || direction.value === 'income';
+    if (direction.value === 'income') funding.value = '';
+  }
   function contractEditRow(c) {
     return `<tr class="edit-row" id="contract-edit-row">
       <td class="expand-col"></td>
-      <td><input name="number" required value="${esc(c.number)}" placeholder="№"></td>
-      <td><input name="documentCard" value="${esc(c.documentCard)}" placeholder="Карта"></td>
+      <td><input name="number" required value="${esc(c.number)}" placeholder="№" autocomplete="off"></td>
+      <td><input name="documentCard" value="${esc(c.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}"></td>
       <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
-      <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент"></td>
+      <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент" list="counterparty-list"></td>
+      <td><select name="direction" onchange="applyContractFieldRules()">${optionTags([['income','Доходный'],['expense','Расходный']], c.direction || 'expense')}</select></td>
       <td><input name="subject" required value="${esc(c.subject)}" placeholder="Предмет"></td>
-      <td><input name="amount" inputmode="decimal" required value="${c.amount ?? ''}" placeholder="0"></td>
+      <td><input name="amount" inputmode="decimal" required value="${c.amount ?? ''}" placeholder="0" autocomplete="off"></td>
       <td><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v ? v + '%' : '—'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
-      <td><input name="fundingSource" value="${esc(c.fundingSource)}" placeholder="Источник"></td>
-      <td><input name="project" value="${esc(c.project)}" placeholder="Проект"></td>
+      <td><select name="fundingContractId">${optionTags(fundingOptions(), c.fundingContractId || '')}</select></td>
+      <td>${dictSelect('project', 'project', c.project || '')}</td>
       <td><input name="responsible" value="${esc(c.responsible)}" placeholder="ФИО"></td>
-      <td><input name="comment" value="${esc(c.comment)}" placeholder="Комментарий"><label style="font-weight:500;margin-top:4px"><input type="checkbox" name="otherExpense" ${c.otherExpense ? 'checked' : ''}> Прочие расходы</label></td>
-      <td><select name="documentKind" onchange="applyContractFieldRules()">${optionTags([['contract','Договор'],['invoice','Счёт'],['none','Без счета, договора']], c.documentKind || 'contract')}</select></td>
-      <td><select name="direction" onchange="applyContractFieldRules()">${optionTags([['income','Доходный'],['expense','Расходный']], c.direction || 'expense')}</select></td>
+      <td><select name="documentKind" onchange="applyContractFieldRules()">${optionTags(CONTRACT_DOC, c.documentKind || 'contract')}</select></td>
       <td><select name="kind" onchange="applyContractFieldRules()">${optionTags([['fixed','Нерамочный'],['framework','Рамочный']], c.kind || 'fixed')}</select></td>
-      <td><select name="category" data-current="${esc(c.category || '')}"></select></td>
-      <td><input name="startDate" type="date" value="${esc(c.startDate)}"></td>
-      <td><input name="endDate" type="date" value="${esc(c.endDate)}"></td>
+      <td><select name="category" onchange="applyContractFieldRules()">${optionTags(CATEGORIES, c.category || 'limit')}</select></td>
+      <td><select name="parentContractId" data-current="${esc(c.parentContractId || '')}" onchange="applyContractFieldRules()"></select></td>
+      <td class="cell-center"><input type="checkbox" name="otherExpense" ${c.otherExpense ? 'checked' : ''} title="Прочие расходы"></td>
       <td class="cell-number">—</td>
       <td class="cell-number">—</td>
+      <td><input name="comment" value="${esc(c.comment)}" placeholder="Комментарий"></td>
       <td class="actions-col"><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="saveContractRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
     </tr>`;
   }
 
+  /* ---------- платежи ---------- */
+  const PAYMENT_COLS = [
+    {label:'Карта документа', w:110},
+    {label:'Номер документа', w:110},
+    {label:'Соглас.', w:100, sort:'approvalDate'},
+    {label:'Оплата', w:100, sort:'paymentDate'},
+    {label:'Договор', w:150},
+    {label:'Контрагент', w:220},
+    {label:'Источник финансирования', w:190},
+    {label:'Сумма с НДС', w:130, cls:'num'},
+    {label:'НДС', w:125, cls:'num'},
+    {label:'Без НДС', w:130, cls:'num'},
+    {label:'Сумма оплаты', w:130, cls:'num'},
+    {label:'Вид', w:150},
+    {label:'Вид платежа', w:115},
+    {label:'Подвид', w:110},
+    {label:'БДДС', w:170},
+    {label:'ЦФО', w:170},
+    {label:'Вид оплаты', w:105},
+    {label:'Ответств.', w:150},
+    {label:'Коммент.', w:240},
+    {label:'', w:88, cls:'actions-col'}
+  ];
+  function setPaymentSort(field) {
+    if (paymentSort.field === field) paymentSort.dir = -paymentSort.dir;
+    else paymentSort = {field, dir: -1};
+    renderPayments();
+  }
   function filteredPayments() {
-    return state.payments.filter(p => rowMatches(p, activeFilters.payment, paymentField));
+    const list = state.payments.filter(p => rowMatches(p, activeFilters.payment, paymentField));
+    const key = p => String(paymentField(p, paymentSort.field) || '');
+    return list.sort((a, b) => key(a).localeCompare(key(b)) * paymentSort.dir || String(a.number).localeCompare(String(b.number)));
   }
   function renderPayments() {
-    const rows = filteredPayments().sort((a,b) => String(b.paymentDate || b.date).localeCompare(String(a.paymentDate || a.date)));
+    const rows = filteredPayments();
     const editItem = editing?.type === 'payment'
-      ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', documentKind:'contract', subtype:'invoice', status:'paid', approvalVatRate:20} : state.payments.find(p => p.id === editing.id))
+      ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', documentKind:'contract', subtype:'invoice', status:'paid', approvalVatRate:DEFAULT_VAT} : state.payments.find(p => p.id === editing.id))
       : null;
     const body = `${editItem && editing.isNew ? paymentEditRow(editItem) : ''}${rows.map(p => {
         if (editItem && p.id === editing.id) return paymentEditRow(p);
         const c = contractById(p.contractId);
         const gross = p.approvalAmount ?? p.amount;
-        const rate = p.approvalVatRate ?? 20;
+        const rate = p.approvalVatRate ?? DEFAULT_VAT;
         const wovat = p.approvalAmountWithoutVat ?? amountWithoutVat(gross, rate);
         const vat = p.approvalVatAmount ?? vatSum(gross, rate);
         const kind = p.paymentKind === 'stage' ? 'gu' : p.paymentKind;
+        const funding = fundingLabel(p.fundingContractId || c?.fundingContractId);
         return `<tr>
           <td>${cellText(p.documentCard)}</td>
-          <td><div class="main-cell">${cellText(p.number)}</div></td>
+          <td><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td>${showDate(p.approvalDate || p.date)}</td>
           <td>${showDate(p.paymentDate || p.date)}</td>
-          <td>${cellText(c?.counterparty)}</td>
-          <td class="cell-center">${labels[p.documentKind] || '—'}</td>
-          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Поступление' : 'Оплата'}</span></td>
+          <td>${cellText(c ? contractLabel(c) : '')}</td>
+          <td>${cellText(p.counterparty || c?.counterparty)}</td>
+          <td>${cellText(funding)}</td>
+          ${moneyCell(gross)}
+          <td class="money cell-number" title="${esc(money(vat))} · ставка ${rate}%">${money(vat)} <small style="color:var(--muted);font-weight:500">(${rate}%)</small></td>
+          ${moneyCell(wovat)}
+          ${moneyCell(p.amount)}
+          <td>${cellText(payDocLabel[p.documentKind] || '')}</td>
+          <td class="cell-center"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${payTypeLabel[p.type] || '—'}</span></td>
           <td class="cell-center">${labels[p.subtype] || '—'}</td>
-          <td>${esc(p.bdds || '—')}</td>
-          <td>${esc(p.cfo || '—')}</td>
-          <td class="money cell-number" title="${esc(money(gross))}">${money(gross)}</td>
-          <td class="money cell-number" title="${esc(money(vat))}">${money(vat)}</td>
-          <td class="money cell-number" title="${esc(money(wovat))}">${money(wovat)}</td>
-          <td class="money cell-number" title="${esc(money(p.amount))}">${money(p.amount)}</td>
-          <td>${labels[kind] || '—'}</td>
+          <td>${cellText(p.bdds)}</td>
+          <td>${cellText(p.cfo)}</td>
+          <td class="cell-center">${labels[kind] || '—'}</td>
           <td>${cellText(p.responsible)}</td>
           <td>${cellText(p.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button><button class="icon-btn delete" onclick="removePayment('${p.id}')">⌫</button></div>` : ''}</td>
         </tr>`;
       }).join('')}`;
-    document.getElementById('payments-table').innerHTML = body ? `<table class="data-table"><thead><tr>
-      <th>Карта документа</th><th class="w-number">Номер договора</th><th class="w-date">Соглас.</th><th class="w-date">Оплата</th><th>Контрагент</th>
-      <th>Вид док.</th><th class="w-type">Вид платежа</th><th>Подвид</th><th>БДДС</th><th>ЦФО</th>
-      <th class="w-money">Сумма с НДС</th><th class="w-money">НДС</th><th class="w-money">Без НДС</th><th class="w-money">Сумма оплаты</th>
-      <th>Вид оплаты</th><th>Ответств.</th><th>Коммент.</th><th class="w-actions"></th>
-      </tr></thead><tbody>${body}</tbody></table>` : '<div class="empty">Ничего не найдено</div>';
+    const head = headRow(PAYMENT_COLS, c => c.sort ? {
+      cls: 'sortable',
+      attrs: `onclick="setPaymentSort('${c.sort}')" title="Сортировать"`,
+      suffix: paymentSort.field === c.sort ? (paymentSort.dir < 0 ? ' ▼' : ' ▲') : ''
+    } : {});
+    document.getElementById('payments-table').innerHTML = body
+      ? `<table class="data-table" style="width:${tableWidth(PAYMENT_COLS)}px">${colgroup(PAYMENT_COLS)}${head}<tbody>${body}</tbody></table>`
+      : `<div class="empty">Ничего не найдено</div>`;
+    applyPaymentFieldRules();
   }
-
+  function counterpartyDatalist() {
+    const names = new Set();
+    state.contracts.forEach(c => c.counterparty && names.add(c.counterparty));
+    state.payments.forEach(p => p.counterparty && names.add(p.counterparty));
+    return `<datalist id="counterparty-list">${[...names].sort((a, b) => a.localeCompare(b, 'ru')).map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
+  }
+  function paymentContractOptions() {
+    return orderedContracts(state.contracts.filter(c => c.documentKind === 'contract' || c.parentContractId))
+      .map(c => [c.id, contractLabel(c, true)]);
+  }
+  function applyPaymentFieldRules() {
+    const row = document.getElementById('payment-edit-row');
+    if (!row) return;
+    const documentKind = row.querySelector('[name=documentKind]').value;
+    const contract = row.querySelector('[name=contractId]');
+    const funding = row.querySelector('[name=fundingContractId]');
+    const byContract = documentKind === 'contract';
+    contract.disabled = !byContract;
+    contract.required = byContract;
+    if (!byContract) contract.value = '';
+    const chosen = contractById(contract.value);
+    if (byContract && chosen) {
+      funding.value = chosen.fundingContractId || '';
+      funding.disabled = true;
+    } else {
+      funding.disabled = byContract;
+    }
+  }
+  function autofillPayment() {
+    const row = document.getElementById('payment-edit-row');
+    if (!row) return;
+    const contract = contractById(row.querySelector('[name=contractId]').value);
+    if (!contract) { applyPaymentFieldRules(); return; }
+    const set = (name, value) => { const el = row.querySelector(`[name=${name}]`); if (el && value != null && value !== '') el.value = value; };
+    const last = paymentsForContract(contract.id)[0] || paymentsForContract(contract.parentContractId)[0];
+    set('counterparty', contract.counterparty);
+    set('type', contract.direction === 'income' ? 'income' : 'expense');
+    set('responsible', last?.responsible || contract.responsible);
+    set('subtype', contract.parentContractId ? (contract.category === 'request' ? 'request' : 'specification') : 'invoice');
+    if (last) {
+      set('paymentKind', last.paymentKind === 'stage' ? 'gu' : last.paymentKind);
+      set('approvalVatRate', last.approvalVatRate);
+      set('bdds', last.bdds);
+      set('cfo', last.cfo);
+    }
+    applyPaymentFieldRules();
+  }
   function paymentEditRow(p) {
     const kind = p.paymentKind === 'stage' ? 'gu' : (p.paymentKind || 'postpay');
-    const specs = (state.specifications || []).filter(s => !p.contractId || s.contractId === p.contractId);
+    const c = contractById(p.contractId);
     return `<tr class="edit-row" id="payment-edit-row">
-      <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта"></td>
-      <td><input name="number" required value="${esc(p.number)}" placeholder="П-001"></td>
+      <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта" autocomplete="off"></td>
+      <td><input name="number" required value="${esc(p.number)}" placeholder="П-001" autocomplete="off"></td>
       <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}"></td>
       <td><input name="paymentDate" type="date" required value="${esc(p.paymentDate || p.date)}"></td>
-      <td><select name="contractId" required><option value="">Договор</option>${state.contracts.map(c => `<option value="${c.id}" ${p.contractId===c.id?'selected':''}>№ ${esc(c.number)}</option>`).join('')}</select></td>
-      <td><select name="documentKind">${optionTags([['contract','Договор'],['invoice','Счёт'],['none','Без счета, договора']], p.documentKind || 'contract')}</select></td>
-      <td><select name="type">${optionTags([['income','Поступление'],['expense','Оплата']], p.type || 'expense')}</select></td>
-      <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || (p.specificationId ? 'specification' : 'invoice'))}</select>
-        <select name="specificationId"><option value="">—</option>${specs.map(s => `<option value="${s.id}" ${p.specificationId===s.id?'selected':''}>${esc(s.number)}</option>`).join('')}</select></td>
-      <td><input name="bdds" value="${esc(p.bdds)}" placeholder="БДДС"></td>
-      <td><input name="cfo" value="${esc(p.cfo)}" placeholder="ЦФО"></td>
-      <td><input name="approvalAmount" inputmode="decimal" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма"></td>
-      <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? 20)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
+      <td><select name="contractId" onchange="autofillPayment()"><option value="">Договор</option>${optionTags(paymentContractOptions(), p.contractId || '')}</select></td>
+      <td><input name="counterparty" required value="${esc(p.counterparty || c?.counterparty || '')}" placeholder="Контрагент" list="counterparty-list"></td>
+      <td><select name="fundingContractId">${optionTags(fundingOptions(), p.fundingContractId || '')}</select></td>
+      <td><input name="approvalAmount" inputmode="decimal" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма" autocomplete="off"></td>
+      <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? DEFAULT_VAT)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
-      <td><input name="amount" inputmode="decimal" required value="${p.amount ?? ''}" placeholder="Оплата"></td>
+      <td><input name="amount" inputmode="decimal" required value="${p.amount ?? ''}" placeholder="Оплата" autocomplete="off"></td>
+      <td><select name="documentKind" onchange="applyPaymentFieldRules()">${optionTags(PAYMENT_DOC, p.documentKind || 'contract')}</select></td>
+      <td><select name="type">${optionTags(PAY_TYPES, p.type || 'expense')}</select></td>
+      <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || 'invoice')}</select></td>
+      <td>${dictSelect('bdds', 'bdds', p.bdds || '')}</td>
+      <td>${dictSelect('cfo', 'cfo', p.cfo || '')}</td>
       <td><select name="paymentKind">${optionTags([['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']], kind)}</select></td>
       <td><input name="responsible" value="${esc(p.responsible)}" placeholder="ФИО"></td>
       <td><input name="comment" value="${esc(p.comment)}" placeholder="Комментарий"></td>
@@ -943,141 +1161,225 @@
     </tr>`;
   }
 
+  /* ---------- аналитика ---------- */
+  const TREE_COLS = [
+    {label:'', w:44, cls:'expand-col'},
+    {label:'Договор', w:300},
+    {label:'Рамочный / нерамочный', w:110},
+    {label:'Контрагент', w:220},
+    {label:'Тип', w:95},
+    {label:'Проект', w:170},
+    {label:'Лимит', w:135, cls:'num'},
+    {label:'Факт (оплаты)', w:135, cls:'num'},
+    {label:'Остаток оплат', w:135, cls:'num'},
+    {label:'Законтрактовано расходов', w:150, cls:'num'},
+    {label:'Остаток (доход − расход)', w:150, cls:'num'},
+    {label:'Прогресс', w:110, cls:'center'}
+  ];
   function progressCell(fact, limit) {
     if (!limit) return '—';
     const ratio = fact / limit;
-    return `<div class="progress ${ratio > 1 ? 'over' : ''}"><span style="width:${Math.max(0, Math.min(ratio, 1)) * 100}%"></span></div>`;
+    return `<div class="progress ${ratio > 1 ? 'over' : ''}" title="${Math.round(ratio * 100)}%"><span style="width:${Math.max(0, Math.min(ratio, 1)) * 100}%"></span></div>`;
   }
-  const TREE_HEAD = `<thead><tr>
-    <th>Договор</th><th>Рамочный/Нерамочный</th><th>Контрагент</th><th>Тип</th>
-    <th class="num">Актуальный лимит</th><th class="num">Факт</th><th class="num">Остаток</th><th class="center">Прогресс</th>
-    <th>№</th><th>Карта</th><th>Начало согл.</th><th>Заверш. согл.</th><th>Дата 1С</th>
-    <th>Контрагент платежа</th><th>Вид</th><th>Вид затрат</th><th>МВЗ</th><th>Проект</th><th>Ключевой контрагент</th>
-  </tr></thead>`;
-  const PAY_PAD = '<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>';
-  function analyticsPayRow(p, c, title) {
-    return `<tr class="row-pay">
-      <td>${esc(title)}</td><td></td><td></td><td></td><td></td>
-      <td class="money cell-number">${money(p.status === 'paid' ? p.amount : 0)}</td><td></td><td></td>
-      <td>${esc(p.number)}</td><td>${esc(p.documentCard || '')}</td>
-      <td>${showDate(p.approvalDate || p.date)}</td><td>${showDate(p.approvalEndDate)}</td><td>${showDate(p.postedDate || p.paymentDate)}</td>
-      <td>${esc(c.counterparty)}</td><td>${p.type === 'income' ? 'Поступление' : 'Платеж'}</td>
-      <td>${esc(p.costType || '—')}</td><td>${esc(p.mvz || p.cfo || '—')}</td>
-      <td>${esc(p.project || c.project || '—')}</td><td>${esc(p.keyCounterparty || '—')}</td>
-    </tr>`;
+  function expandBtn(key, count) {
+    const open = analyticsAllOpen || expandedAnalytics.has(key);
+    return `<button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleAnalytics('${key}')"><span class="chev">▸</span>${count ? `<span class="count">${count}</span>` : ''}</button>`;
   }
-  function analyticsContractRows(c) {
-    const fact = completedPayments(c.id);
+  function isOpen(key) { return analyticsAllOpen || expandedAnalytics.has(key); }
+  function toggleAnalytics(key) {
+    if (analyticsAllOpen) {
+      analyticsAllOpen = false;
+      expandedAnalytics.clear();
+      state.contracts.forEach(c => { expandedAnalytics.add(c.id); expandedAnalytics.add('free-' + c.id); });
+      expandedAnalytics.add('nofunding');
+      expandedAnalytics.add('free-nofunding');
+    }
+    if (expandedAnalytics.has(key)) expandedAnalytics.delete(key); else expandedAnalytics.add(key);
+    renderAnalytics();
+  }
+  function toggleAllAnalytics() {
+    analyticsAllOpen = !analyticsAllOpen;
+    expandedAnalytics.clear();
+    renderAnalytics();
+  }
+  function treeRow(cls, cells) { return `<tr class="${cls}">${cells.join('')}</tr>`; }
+  const EMPTY = '<td></td>';
+  function contractTreeRow(c, cls, title, extra = {}) {
     const limit = Number(c.amount) || 0;
-    let html = `<tr class="row-contract">
-      <td>Договор № ${esc(c.number)} от ${showDate(c.date)}</td>
-      <td>${labels[c.kind] || '—'}</td><td>${esc(c.counterparty)}</td><td>${labels[c.direction]}</td>
-      <td class="money cell-number">${money(limit)}</td>
-      <td class="money cell-number">${money(fact)}</td>
-      <td class="money cell-number">${money(limit - fact)}</td>
-      <td>${progressCell(fact, limit)}</td>${PAY_PAD}
-    </tr>`;
-    const pays = paymentsForContract(c.id);
-    if (c.kind === 'framework') {
-      const free = contractLimitRemainder(c) || 0;
-      html += `<tr class="row-free"><td>[!] Свободный лимит (без спецификаций)</td><td></td><td></td><td></td><td class="money cell-number">${money(free)}</td><td></td><td></td><td></td>${PAY_PAD}</tr>`;
-      specsForContract(c.id).forEach(s => {
-        const specFact = completedPayments(c.id, s.id);
-        const specLimit = Number(s.amount) || 0;
-        html += `<tr class="row-spec"><td>Спецификация ${esc(s.number)}</td><td></td><td>${esc(s.subject)}</td><td></td>
-          <td class="money cell-number">${money(specLimit)}</td>
-          <td class="money cell-number">${money(specFact)}</td>
-          <td class="money cell-number">${money(specLimit - specFact)}</td>
-          <td>${progressCell(specFact, specLimit)}</td>${PAY_PAD}</tr>`;
-        pays.filter(p => p.specificationId === s.id).forEach(p => { html += analyticsPayRow(p, c, 'Оплата по спец.'); });
-      });
-      pays.filter(p => !p.specificationId).forEach(p => { html += analyticsPayRow(p, c, 'Оплата вне спецификации'); });
-    } else {
-      pays.forEach(p => { html += analyticsPayRow(p, c, 'Оплата (без специф.)'); });
+    const fact = contractFact(c);
+    const kids = childrenOf(c.id);
+    const key = c.id;
+    const btn = extra.expandable && kids.length ? expandBtn(key, kids.length) : (extra.btn || '');
+    const parts = [
+      `<td class="expand-col">${btn}</td>`,
+      `<td title="${esc(title)}">${esc(title)}</td>`,
+      `<td class="cell-center">${labels[c.kind] || '—'}</td>`,
+      `<td>${cellText(c.counterparty)}</td>`,
+      `<td class="cell-center">${c.direction ? `<span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span>` : (labels[c.documentKind] || '—')}</td>`,
+      `<td>${cellText(c.project)}</td>`,
+      moneyCell(limit),
+      moneyCell(fact),
+      moneyCell(limit - fact),
+      extra.contracted == null ? EMPTY : moneyCell(extra.contracted),
+      extra.balance == null ? EMPTY : moneyCell(extra.balance),
+      `<td class="cell-center">${progressCell(fact, limit)}</td>`
+    ];
+    let html = treeRow(cls, parts);
+    if (extra.expandable && kids.length && isOpen(key)) {
+      kids.forEach(k => { html += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
+      const free = contractLimitRemainder(c);
+      if (free != null) html += treeRow('row-spec', [EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
     }
     return html;
   }
-  function sumLimit(list) { return list.reduce((sum, c) => sum + Number(c.amount || 0), 0); }
-  function sumFact(list) { return list.reduce((sum, c) => sum + completedPayments(c.id), 0); }
-  function freeLimit(list) {
-    return list.filter(c => c.kind === 'framework').reduce((sum, c) => sum + (contractLimitRemainder(c) || 0), 0);
+  function freePaymentsRows(list, key) {
+    if (!list.length) return '';
+    const total = sumAmount(list);
+    const paid = sumPaid(list);
+    let html = treeRow('row-pay', [
+      `<td class="expand-col">${expandBtn(key, list.length)}</td>`,
+      `<td>Счета без договора (${list.length})</td>`, EMPTY, EMPTY, '<td class="cell-center"><span class="badge gray">Счета</span></td>', EMPTY,
+      moneyCell(total), moneyCell(paid), moneyCell(total - paid), EMPTY, EMPTY, `<td class="cell-center">${progressCell(paid, total)}</td>`
+    ]);
+    if (isOpen(key)) {
+      list.forEach(p => {
+        html += treeRow('row-spec', [
+          EMPTY, `<td title="${esc(p.number)}">${esc(p.number)} · ${showDate(p.paymentDate || p.date)}${p.comment ? ' · ' + esc(p.comment) : ''}</td>`, EMPTY,
+          `<td>${cellText(p.counterparty)}</td>`, `<td class="cell-center">${payDocLabel[p.documentKind] || '—'}</td>`, `<td>${cellText(p.project)}</td>`,
+          moneyCell(p.amount), moneyCell(p.status === 'paid' ? p.amount : 0), EMPTY, EMPTY, EMPTY, `<td class="cell-center">${statusBadge(p.status)}</td>`
+        ]);
+      });
+    }
+    return html;
+  }
+  function analyticsMatches(c) { return rowMatches(c, activeFilters.analytics, analyticsField); }
+  function renderDashboard(income) {
+    const items = income.map(c => ({c, free: Number(c.amount || 0) - contracted(c)})).sort((a, b) => b.free - a.free);
+    const max = Math.max(1, ...items.map(i => Math.abs(i.free)));
+    const total = items.reduce((s, i) => s + Math.max(0, i.free), 0);
+    document.getElementById('analytics-dash').innerHTML = `<div class="dash-head"><h3>Свободный остаток по доходным договорам — можем законтрактовать</h3><span>лимит доходного договора минус привязанные расходные договоры и счета · всего ${money(total)}</span></div>` +
+      (items.length ? items.map(i => `<div class="dash-row">
+        <div class="dash-label" title="${esc(contractLabel(i.c, true))}">№ ${esc(i.c.number)}<small>${esc(i.c.counterparty)}</small></div>
+        <div class="dash-track"><div class="dash-bar ${i.free < 0 ? 'neg' : ''}" style="width:${Math.max(1, Math.abs(i.free) / max * 100)}%"></div></div>
+        <div class="dash-value ${i.free < 0 ? 'neg' : ''}">${money(i.free)}</div>
+      </div>`).join('') : '<div class="dash-empty">Нет доходных договоров</div>');
   }
   function renderAnalytics() {
-    const main = state.contracts.filter(c => !c.otherExpense);
-    const income = main.filter(c => c.direction === 'income');
-    const expense = main.filter(c => c.direction === 'expense');
-    const incomeLimit = sumLimit(income);
-    const expenseLimit = sumLimit(expense);
-    const incomeFact = sumFact(income);
-    const expenseFact = sumFact(expense);
+    const income = incomeContracts();
+    const expense = state.contracts.filter(c => isExpenseSide(c) && !c.otherExpense);
+    const incomeLimit = sumAmount(income);
+    const incomeFact = income.reduce((s, c) => s + contractFact(c), 0);
+    const allFree = freePayments();
+    const expenseLimit = sumAmount(expense) + sumAmount(allFree);
+    const expenseFact = expense.reduce((s, c) => s + contractFact(c), 0) + sumPaid(allFree);
+    const freeToContract = income.reduce((s, c) => s + Math.max(0, Number(c.amount || 0) - contracted(c)), 0);
     document.getElementById('analytics-cards').innerHTML =
-      metric('Доходы (лимит всего)', money(incomeLimit), 'без прочих расходов') +
+      metric('Доходы (лимит)', money(incomeLimit), 'доходные договоры, без прочих расходов') +
       metric('Доходы (факт)', money(incomeFact), 'исполненные поступления', 'good') +
-      metric('Расходы (лимит всего)', money(expenseLimit), 'без прочих расходов') +
-      metric('Расходы (факт всего)', money(expenseFact), 'исполненные оплаты') +
-      metric('Свободный лимит доходов', money(freeLimit(income)), 'рамочные, без спецификаций') +
-      metric('Свободный лимит расходов', money(freeLimit(expense)), 'рамочные, без спецификаций');
+      metric('Расходы (законтрактовано)', money(expenseLimit), 'расходные договоры и счета без договора') +
+      metric('Расходы (факт)', money(expenseFact), 'исполненные списания') +
+      metric('Остаток (доход − расход)', money(incomeLimit - expenseLimit), 'по лимитам', incomeLimit - expenseLimit < 0 ? 'warn' : 'good') +
+      metric('Можем законтрактовать', money(freeToContract), 'сумма свободных остатков доходных договоров', 'good');
+    renderDashboard(income);
 
-    const ordered = [...income, ...expense];
-    const totalLimit = sumLimit(expense);
-    const totalFact = sumFact(expense);
-    const balanceLimit = incomeLimit - expenseLimit;
-    const balanceFact = incomeFact - expenseFact;
-    const rows = ordered.map(analyticsContractRows).join('') + `<tr class="row-total">
-      <td>Итого по расходам</td><td></td><td></td><td></td>
-      <td class="money cell-number">${money(totalLimit)}</td>
-      <td class="money cell-number">${money(totalFact)}</td>
-      <td class="money cell-number">${money(totalLimit - totalFact)}</td><td></td>${PAY_PAD}
-    </tr><tr class="row-balance">
-      <td>Остаток (доход минус расходы)</td><td></td><td></td><td></td>
-      <td class="money cell-number">${money(balanceLimit)}</td>
-      <td class="money cell-number">${money(balanceFact)}</td>
-      <td class="money cell-number">${money((incomeLimit - incomeFact) - (expenseLimit - expenseFact))}</td><td></td>${PAY_PAD}
-    </tr>`;
-    document.getElementById('analytics-tree').innerHTML = `<table class="tree-table">${TREE_HEAD}<tbody>${rows}</tbody></table>`;
+    const matchedIds = new Set(state.contracts.filter(analyticsMatches).map(c => c.id));
+    const filtering = activeFilters.analytics.length > 0;
+    let rows = '';
+    income.forEach(inc => {
+      const funded = fundedContracts(inc.id);
+      const free = freePayments(inc.id);
+      const incMatch = matchedIds.has(inc.id);
+      const visibleFunded = filtering && !incMatch ? funded.filter(c => matchedIds.has(c.id) || childrenOf(c.id).some(k => matchedIds.has(k.id))) : funded;
+      if (filtering && !incMatch && !visibleFunded.length) return;
+      const count = funded.length + (free.length ? 1 : 0) + childrenOf(inc.id).length;
+      const ctd = contracted(inc);
+      rows += contractTreeRow(inc, 'row-income', `Договор № ${inc.number} от ${showDate(inc.date)} · ${inc.subject}`, {
+        btn: count ? expandBtn(inc.id, count) : '', contracted: ctd, balance: Number(inc.amount || 0) - ctd
+      });
+      if (isOpen(inc.id) || (filtering && !incMatch)) {
+        childrenOf(inc.id).forEach(k => { rows += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
+        visibleFunded.forEach(c => { rows += contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true}); });
+        rows += freePaymentsRows(free, 'free-' + inc.id);
+      }
+    });
+    const orphans = expense.filter(c => !c.fundingContractId || !contractById(c.fundingContractId));
+    const orphanFree = allFree.filter(p => !p.fundingContractId || !contractById(p.fundingContractId));
+    const visibleOrphans = filtering ? orphans.filter(c => matchedIds.has(c.id) || childrenOf(c.id).some(k => matchedIds.has(k.id))) : orphans;
+    if (visibleOrphans.length || (orphanFree.length && !filtering)) {
+      const total = sumAmount(orphans) + sumAmount(orphanFree);
+      const fact = orphans.reduce((s, c) => s + contractFact(c), 0) + sumPaid(orphanFree);
+      rows += treeRow('row-free', [
+        `<td class="expand-col">${expandBtn('nofunding', orphans.length + (orphanFree.length ? 1 : 0))}</td>`,
+        '<td>[!] Без источника финансирования</td>', EMPTY, EMPTY, EMPTY, EMPTY,
+        moneyCell(total), moneyCell(fact), moneyCell(total - fact), EMPTY, EMPTY, EMPTY
+      ]);
+      if (isOpen('nofunding') || filtering) {
+        visibleOrphans.forEach(c => { rows += contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true}); });
+        if (!filtering) rows += freePaymentsRows(orphanFree, 'free-nofunding');
+      }
+    }
+    rows += treeRow('row-total', ['<td></td><td>Итого доходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit), moneyCell(incomeFact), moneyCell(incomeLimit - incomeFact), EMPTY, EMPTY, EMPTY]);
+    rows += treeRow('row-total', ['<td></td><td>Итого расходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(expenseLimit), moneyCell(expenseFact), moneyCell(expenseLimit - expenseFact), EMPTY, EMPTY, EMPTY]);
+    rows += treeRow('row-balance', ['<td></td><td>Остаток (доход − расход)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit - expenseLimit), moneyCell(incomeFact - expenseFact), moneyCell((incomeLimit - incomeFact) - (expenseLimit - expenseFact)), EMPTY, EMPTY, EMPTY]);
+    document.getElementById('analytics-tree').innerHTML = `<table class="tree-table" style="width:${tableWidth(TREE_COLS)}px">${colgroup(TREE_COLS)}${headRow(TREE_COLS)}<tbody>${rows}</tbody></table>`;
+    document.getElementById('analytics-expand-all').textContent = analyticsAllOpen ? 'Свернуть всё' : 'Развернуть всё';
 
-    const other = state.contracts.filter(c => c.otherExpense);
+    const other = state.contracts.filter(c => isTop(c) && c.otherExpense).filter(c => !filtering || matchedIds.has(c.id));
     document.getElementById('analytics-other').innerHTML = other.length
-      ? `<table class="tree-table">${TREE_HEAD}<tbody>${other.map(analyticsContractRows).join('')}</tbody></table>`
+      ? `<table class="tree-table" style="width:${tableWidth(TREE_COLS)}px">${colgroup(TREE_COLS)}${headRow(TREE_COLS)}<tbody>${other.map(c => contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true})).join('')}</tbody></table>`
       : '<div class="empty">Нет договоров в блоке прочих расходов</div>';
   }
+  function metric(label, value, note, noteClass = '') {
+    return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value" title="${esc(value)}">${value}</div><div class="metric-note ${noteClass}">${note}</div></div>`;
+  }
 
-  function renderImportReport(report) {
-    const box = document.getElementById('import-report');
-    const duplicates = report.duplicates || [];
-    const errors = report.errors || [];
-    const lists = [
-      duplicates.length ? `<h4>Дубли, не загружены</h4><ul>${duplicates.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '',
-      errors.length ? `<h4>Ошибки в данных</h4><ul>${errors.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : ''
-    ].join('');
-    box.hidden = false;
-    box.innerHTML = `<div class="panel-body"><h3>Результат импорта</h3><p>Добавлено договоров: ${report.addedContracts}. Платежей: ${report.addedPayments}.</p>${lists || '<p>Все строки загружены.</p>'}</div>`;
+  /* ---------- справочники ---------- */
+  let dictEditing = null;
+  function renderDictionaries() {
+    document.getElementById('dictionaries-grid').innerHTML = DICT_KINDS.map(([kind, title]) => {
+      const items = state.dictionaries.filter(d => d.kind === kind).sort((a, b) => a.value.localeCompare(b.value, 'ru'));
+      return `<div class="panel">
+        <div class="panel-head"><h3>${title}</h3><span class="dict-count">${items.length}</span></div>
+        <ul class="dict-list">${items.length ? items.map(d => dictEditing === d.id
+          ? `<li><input id="dict-edit-${d.id}" value="${esc(d.value)}" onkeydown="if(event.key==='Enter'){saveDictionary('${d.id}');event.preventDefault();} if(event.key==='Escape'){dictEditing=null;renderDictionaries();}"><button class="icon-btn" title="Сохранить" onclick="saveDictionary('${d.id}')">✓</button><button class="icon-btn delete" title="Отмена" onclick="dictEditing=null;renderDictionaries()">✕</button></li>`
+          : `<li><span title="${esc(d.value)}">${esc(d.value)}</span>${canEdit() ? `<button class="icon-btn" title="Изменить" onclick="dictEditing='${d.id}';renderDictionaries();document.getElementById('dict-edit-${d.id}')?.focus()">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeDictionary('${d.id}')">⌫</button>` : ''}</li>`
+        ).join('') : '<li class="payment-empty">Список пуст</li>'}</ul>
+        ${canEdit() ? `<div class="dict-add"><input id="dict-new-${kind}" placeholder="Новое значение" onkeydown="if(event.key==='Enter'){addDictionary('${kind}');event.preventDefault();}"><button class="btn primary" onclick="addDictionary('${kind}')">Добавить</button></div>` : ''}
+      </div>`;
+    }).join('');
   }
-  async function exportRegistry() {
-    const response = await fetch('/api/export', {credentials: 'same-origin'});
-    if (response.status === 401) { location.href = '/login'; return; }
-    if (!response.ok) { toast('Не удалось выгрузить реестр'); return; }
-    const blob = await response.blob();
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'registry.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
-  async function importRegistry(input) {
-    const file = input.files && input.files[0];
-    input.value = '';
-    if (!file) return;
+  async function addDictionary(kind) {
+    const input = document.getElementById(`dict-new-${kind}`);
+    const value = (input.value || '').trim();
+    if (!value) return;
     try {
-      const report = await api('/api/import', {method: 'POST', body: JSON.stringify({text: await file.text()})});
-      renderImportReport(report);
+      await api('/api/dictionaries', {method: 'POST', body: JSON.stringify({kind, value})});
       await load();
-      const skipped = (report.duplicates || []).length + (report.errors || []).length;
-      toast(skipped ? `Загружено не всё: пропущено ${skipped}` : 'Импорт выполнен');
-    } catch (error) {
-      if (!quiet(error)) toast('Не удалось импортировать файл');
-    }
+      toast('Значение добавлено');
+    } catch (error) { if (!quiet(error)) toast('Не удалось добавить значение'); }
   }
+  async function saveDictionary(id) {
+    const item = state.dictionaries.find(d => d.id === id);
+    const value = (document.getElementById(`dict-edit-${id}`)?.value || '').trim();
+    if (!item || !value) return;
+    try {
+      await api('/api/dictionaries/' + encodeURIComponent(id), {method: 'PATCH', body: JSON.stringify({kind: item.kind, value, version: item.version})});
+      dictEditing = null;
+      await load();
+      toast('Значение сохранено');
+    } catch (error) { if (!quiet(error)) toast('Не удалось сохранить значение'); }
+  }
+  async function removeDictionary(id) {
+    const item = state.dictionaries.find(d => d.id === id);
+    if (!item || !confirm(`Удалить «${item.value}» из справочника?`)) return;
+    try {
+      await api('/api/dictionaries/' + encodeURIComponent(id) + '?version=' + item.version, {method: 'DELETE'});
+      await load();
+      toast('Значение удалено');
+    } catch (error) { if (!quiet(error)) toast('Не удалось удалить значение'); }
+  }
+
+  /* ---------- экспорт / импорт / история ---------- */
   function renderImportReport(report) {
     const box = document.getElementById('import-report');
     const duplicates = report.duplicates || [];
@@ -1116,17 +1418,18 @@
   }
   function renderHistory() {
     const history = state.history || [];
-    const section = {contract:'Договоры', payment:'Платежи', specification:'Спецификации'};
+    const section = {contract:'Договоры', payment:'Платежи', specification:'Спецификации', dictionary:'Справочники'};
     document.getElementById('history-table').innerHTML = history.length ? `<table class="history-table"><thead><tr>
-      <th class="w-date">Дата и время</th><th class="w-type">Раздел</th><th>Изменение</th><th class="w-actions">Откат</th>
+      <th style="width:120px">Дата и время</th><th style="width:120px">Раздел</th><th>Изменение</th><th style="width:110px">Откат</th>
       </tr></thead><tbody>${history.map(item => `<tr>
         <td><div class="main-cell">${new Date(item.timestamp).toLocaleDateString('ru-RU')}</div><div class="history-meta">${new Date(item.timestamp).toLocaleTimeString('ru-RU')}</div></td>
         <td class="cell-center"><span class="badge blue">${section[item.entityType] || 'Система'}</span></td>
         <td><div class="main-cell">${esc(item.action)}</div><div class="history-meta">${esc(item.label)}${item.actor ? ' · ' + esc(item.actor) : ''}</div></td>
-        <td class="cell-center">${state.me && state.me.canRollback ? `<button class="btn" onclick="rollbackHistory('${item.id}')">Вернуть</button>` : ''}</td>
+        <td class="cell-center">${state.me && state.me.canRollback ? `<button class="btn small" onclick="rollbackHistory('${item.id}')">Вернуть</button>` : ''}</td>
       </tr>`).join('')}</tbody></table>` : '<div class="empty">История появится после первого изменения</div>';
   }
 
+  /* ---------- сохранение строк ---------- */
   function rowValues(rowId) {
     const result = {};
     document.querySelectorAll(`#${rowId} [name]`).forEach(input => {
@@ -1148,17 +1451,20 @@
   function startContractRow(id = '') {
     if (!canEdit()) return;
     editing = {type:'contract', id: id || 'new', isNew: !id};
+    const current = id ? contractById(id) : null;
+    if (current?.parentContractId) expandedContracts.add(current.parentContractId);
     navigate('contracts');
     renderContracts();
     document.querySelector('#contract-edit-row input')?.focus();
+    document.getElementById('contract-edit-row')?.scrollIntoView({block: 'nearest'});
   }
   function startPaymentRow(id = '') {
     if (!canEdit()) return;
-    if (!state.contracts.length) { toast('Сначала добавьте договор'); return; }
     editing = {type:'payment', id: id || 'new', isNew: !id};
     navigate('payments');
     renderPayments();
     document.querySelector('#payment-edit-row input')?.focus();
+    document.getElementById('payment-edit-row')?.scrollIntoView({block: 'nearest'});
   }
   function cancelRowEdit() {
     const type = editing?.type;
@@ -1170,76 +1476,87 @@
     if (rowSaving) return;
     rowSaving = true;
     try {
-    const row = document.getElementById('contract-edit-row');
-    const required = [...row.querySelectorAll('[required]')];
-    if (!required.every(input => input.reportValidity())) return;
-    const values = rowValues('contract-edit-row');
-    if (!validateRegistryFields(values)) return;
-    const amount = parseAmount(values.amount);
-    if (amount == null) return rejectRow('Укажите сумму числом');
-    values.amount = amount;
-    values.vatRate = Number(values.vatRate);
-    if (values.documentKind === 'invoice' || values.documentKind === 'none') {
-      values.direction = '';
-      values.kind = '';
-      values.category = 'limit';
-      values.startDate = '';
-      values.endDate = '';
-    } else if (values.kind === 'fixed' && (values.category === 'specification' || values.category === 'request')) {
-      values.category = 'limit';
-    }
-    values.otherExpense = values.direction === 'expense' && !!values.otherExpense;
-    const existing = state.contracts.find(c => c.id === editing.id);
-    const entity = {...(existing || {status:'active'}), ...values, id: existing?.id || uid('contract')};
-    entity.amountWithoutVat = amountWithoutVat(entity.amount, entity.vatRate);
-    entity.documentCard = String(entity.documentCard || '').trim();
-    entity.date = entity.reviewDate || entity.date;
-    entity.reviewDate = entity.reviewDate || entity.date;
-    entity.registrationDate = entity.registrationDate || entity.date;
-    entity.documentKind = entity.documentKind || 'contract';
-    entity.category = entity.category || 'limit';
-    try { await persistRow('/api/contracts', entity, existing, 'Изменения сохранены'); }
-    catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
+      const row = document.getElementById('contract-edit-row');
+      const required = [...row.querySelectorAll('[required]')].filter(el => !el.disabled);
+      if (!required.every(input => input.reportValidity())) return;
+      const values = rowValues('contract-edit-row');
+      if (!validateRegistryFields(values)) return;
+      const amount = parseAmount(values.amount);
+      if (amount == null) return rejectRow('Укажите сумму числом');
+      values.amount = amount;
+      values.vatRate = Number(values.vatRate);
+      if (values.category !== 'limit') {
+        if (!values.parentContractId) return rejectRow('Выберите договор-основание');
+        values.documentKind = 'contract';
+        const parent = contractById(values.parentContractId);
+        if (parent) { values.direction = parent.direction; values.fundingContractId = parent.fundingContractId || ''; }
+      } else {
+        values.parentContractId = '';
+      }
+      if (values.documentKind === 'invoice' || values.documentKind === 'none') {
+        values.direction = '';
+        values.kind = '';
+        values.category = 'limit';
+      }
+      if (values.direction === 'income') values.fundingContractId = '';
+      values.otherExpense = values.direction === 'expense' && !!values.otherExpense;
+      values.fundingSource = contractById(values.fundingContractId)?.number || '';
+      const existing = contractById(editing.id);
+      const entity = {...(existing || {status:'active'}), ...values, id: existing?.id || uid('contract')};
+      entity.amountWithoutVat = amountWithoutVat(entity.amount, entity.vatRate);
+      entity.documentCard = String(entity.documentCard || '').trim();
+      entity.date = entity.reviewDate || entity.date;
+      entity.reviewDate = entity.reviewDate || entity.date;
+      entity.registrationDate = entity.registrationDate || entity.date;
+      entity.documentKind = entity.documentKind || 'contract';
+      entity.category = entity.category || 'limit';
+      entity.startDate = existing?.startDate || '';
+      entity.endDate = existing?.endDate || '';
+      try { await persistRow('/api/contracts', entity, existing, 'Изменения сохранены'); }
+      catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
     } finally { rowSaving = false; }
   }
   async function savePaymentRow() {
     if (rowSaving) return;
     rowSaving = true;
     try {
-    const row = document.getElementById('payment-edit-row');
-    const required = [...row.querySelectorAll('[required]')];
-    if (!required.every(input => input.reportValidity())) return;
-    const values = rowValues('payment-edit-row');
-    if (!validateRegistryFields(values)) return;
-    const amount = parseAmount(values.amount);
-    const approval = parseAmount(values.approvalAmount);
-    if (amount == null || (String(values.approvalAmount || '').trim() && approval == null)) return rejectRow('Укажите сумму числом');
-    values.amount = amount;
-    values.approvalAmount = approval == null ? amount : approval;
-    values.approvalVatRate = Number(values.approvalVatRate || 0);
-    values.approvalAmountWithoutVat = amountWithoutVat(values.approvalAmount, values.approvalVatRate);
-    values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
-    values.paymentDate = values.paymentDate || values.approvalDate;
-    values.approvalDate = values.approvalDate || values.paymentDate;
-    values.date = values.paymentDate;
-    if (values.subtype !== 'specification') values.specificationId = '';
-    const contract = contractById(values.contractId);
-    const existing = state.payments.find(p => p.id === editing.id);
-    const status = existing?.status || 'paid';
-    if (contract && status === 'paid' && values.type === contract.direction) {
-      const otherPaid = state.payments.filter(p => p.contractId === contract.id && p.status === 'paid' && p.id !== existing?.id).reduce((s,p) => s + Number(p.amount), 0);
-      if (otherPaid + values.amount > Number(contract.amount) &&
-          !confirm(`Операция превысит лимит на ${money(otherPaid + values.amount - contract.amount)}. Сохранить?`)) return;
-    }
-    const entity = {...(existing || {}), ...values, status, id: existing?.id || uid('payment')};
-    entity.postedDate = entity.postedDate || entity.paymentDate;
-    entity.approvalEndDate = entity.approvalEndDate || entity.approvalDate;
-    entity.costType = entity.costType || entity.bdds;
-    entity.mvz = entity.mvz || entity.cfo;
-    entity.project = entity.project || contract?.project || '';
-    entity.keyCounterparty = entity.keyCounterparty || contract?.counterparty || '';
-    try { await persistRow('/api/payments', entity, existing, 'Изменения сохранены'); }
-    catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
+      const row = document.getElementById('payment-edit-row');
+      const required = [...row.querySelectorAll('[required]')].filter(el => !el.disabled);
+      if (!required.every(input => input.reportValidity())) return;
+      const values = rowValues('payment-edit-row');
+      if (!validateRegistryFields(values)) return;
+      const amount = parseAmount(values.amount);
+      const approval = parseAmount(values.approvalAmount);
+      if (amount == null || (String(values.approvalAmount || '').trim() && approval == null)) return rejectRow('Укажите сумму числом');
+      if (values.documentKind === 'contract' && !values.contractId) return rejectRow('Для счета по договору выберите договор');
+      if (values.documentKind !== 'contract') values.contractId = '';
+      values.amount = amount;
+      values.approvalAmount = approval == null ? amount : approval;
+      values.approvalVatRate = Number(values.approvalVatRate || 0);
+      values.approvalAmountWithoutVat = amountWithoutVat(values.approvalAmount, values.approvalVatRate);
+      values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
+      values.paymentDate = values.paymentDate || values.approvalDate;
+      values.approvalDate = values.approvalDate || values.paymentDate;
+      values.date = values.paymentDate;
+      values.specificationId = '';
+      const contract = contractById(values.contractId);
+      if (contract) values.fundingContractId = contract.fundingContractId || '';
+      const existing = state.payments.find(p => p.id === editing.id);
+      const status = existing?.status || 'paid';
+      if (contract && status === 'paid' && values.type === (contract.direction === 'income' ? 'income' : 'expense')) {
+        const otherPaid = ownPaid(contract.id) - (existing && existing.contractId === contract.id && existing.status === 'paid' ? Number(existing.amount) : 0);
+        if (otherPaid + values.amount > Number(contract.amount) &&
+            !confirm(`Операция превысит лимит на ${money(otherPaid + values.amount - contract.amount)}. Сохранить?`)) return;
+      }
+      const entity = {...(existing || {}), ...values, status, id: existing?.id || uid('payment')};
+      entity.postedDate = entity.postedDate || entity.paymentDate;
+      entity.approvalEndDate = entity.approvalEndDate || entity.approvalDate;
+      entity.costType = entity.bdds;
+      entity.mvz = entity.cfo;
+      entity.project = contract?.project || entity.project || '';
+      entity.keyCounterparty = entity.counterparty;
+      try { await persistRow('/api/payments', entity, existing, 'Изменения сохранены'); }
+      catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
     } finally { rowSaving = false; }
   }
   async function rollbackHistory(id) {
@@ -1253,91 +1570,12 @@
       toast('Состояние восстановлено');
     } catch (error) { if (!quiet(error)) toast('Не удалось выполнить откат'); }
   }
-
-  function renderAll() { renderContracts(); renderPayments(); renderAnalytics(); renderHistory(); }
-
-  function openModal(title, body, context) {
-    formContext = context;
-    document.getElementById('modal-title').textContent = title;
-    document.getElementById('modal-body').innerHTML = body;
-    document.getElementById('modal-backdrop').classList.add('open');
-  }
-  function closeModal() { document.getElementById('modal-backdrop').classList.remove('open'); formContext = null; }
-  document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') closeModal(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-  function openContract(id = '') {
-    const c = state.contracts.find(x => x.id === id) || {direction:'expense',kind:'fixed',vatRate:20,status:'active'};
-    openModal(id ? 'Изменить договор' : 'Новый договор', `<div class="form-grid">
-      <div class="field"><label>Номер *</label><input name="number" required value="${esc(c.number)}" placeholder="15/26"></div>
-      <div class="field"><label>Дата договора *</label><input name="date" type="date" required value="${esc(c.date)}"></div>
-      <div class="field full"><label>Контрагент *</label><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Наименование организации"></div>
-      <div class="field full"><label>Предмет договора *</label><input name="subject" required value="${esc(c.subject)}" placeholder="Краткое описание"></div>
-      <div class="field"><label>Направление</label><select name="direction"><option value="income" ${c.direction==='income'?'selected':''}>Доходный</option><option value="expense" ${c.direction==='expense'?'selected':''}>Расходный</option></select></div>
-      <div class="field"><label>Вид договора</label><select name="kind"><option value="fixed" ${c.kind==='fixed'?'selected':''}>Нерамочный</option><option value="framework" ${c.kind==='framework'?'selected':''}>Рамочный</option></select></div>
-      <div class="field"><label>Сумма с НДС, ₽ *</label><input name="amount" inputmode="decimal" required value="${c.amount ?? ''}"></div>
-      <div class="field"><label>Ставка НДС, %</label><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(c.vatRate)===v?'selected':''}>${v === 0 ? 'Без НДС' : v + '%'}</option>`).join('')}</select></div>
-      <div class="field"><label>Проект</label><input name="project" value="${esc(c.project)}" placeholder="Название проекта"></div>
-      <div class="field"><label>Ответственный</label><input name="responsible" value="${esc(c.responsible)}" placeholder="ФИО"></div>
-      <div class="field"><label>Дата начала</label><input name="startDate" type="date" value="${esc(c.startDate)}"></div>
-      <div class="field"><label>Дата окончания</label><input name="endDate" type="date" value="${esc(c.endDate)}"></div>
-      <div class="field"><label>Статус</label><select name="status"><option value="draft" ${c.status==='draft'?'selected':''}>Черновик</option><option value="active" ${c.status==='active'?'selected':''}>Действует</option><option value="closed" ${c.status==='closed'?'selected':''}>Завершен</option></select></div>
-      <div class="field full"><label>Комментарий</label><textarea name="comment">${esc(c.comment)}</textarea></div>
-    </div>`, {type:'contract', id});
-  }
-
-  function openPayment(id = '') {
-    if (!state.contracts.length) { toast('Сначала добавьте договор'); return; }
-    const p = state.payments.find(x => x.id === id) || {type:'expense',paymentKind:'postpay',status:'paid'};
-    openModal(id ? 'Изменить операцию' : 'Новая операция', `<div class="form-grid">
-      <div class="field"><label>Номер операции *</label><input name="number" required value="${esc(p.number)}" placeholder="П-0001"></div>
-      <div class="field"><label>Дата *</label><input name="date" type="date" required value="${esc(p.date)}"></div>
-      <div class="field full"><label>Договор *</label><select name="contractId" required><option value="">Выберите договор</option>${state.contracts.map(c => `<option value="${c.id}" ${p.contractId===c.id?'selected':''}>№ ${esc(c.number)} · ${esc(c.counterparty)}</option>`).join('')}</select></div>
-      <div class="field"><label>Операция</label><select name="type"><option value="income" ${p.type==='income'?'selected':''}>Поступление</option><option value="expense" ${p.type==='expense'?'selected':''}>Платеж</option></select></div>
-      <div class="field"><label>Сумма, ₽ *</label><input name="amount" inputmode="decimal" required value="${p.amount ?? ''}"></div>
-      <div class="field"><label>Вид оплаты</label><select name="paymentKind"><option value="advance" ${p.paymentKind==='advance'?'selected':''}>Аванс</option><option value="postpay" ${p.paymentKind==='postpay'?'selected':''}>Постоплата</option><option value="gu" ${p.paymentKind==='gu' || p.paymentKind==='stage'?'selected':''}>ГУ</option></select></div>
-      <div class="field"><label>Статус</label><select name="status"><option value="planned" ${p.status==='planned'?'selected':''}>Запланирован</option><option value="paid" ${p.status==='paid'?'selected':''}>Исполнен</option><option value="cancelled" ${p.status==='cancelled'?'selected':''}>Отменен</option></select></div>
-      <div class="field full"><label>Комментарий</label><textarea name="comment">${esc(p.comment)}</textarea></div>
-    </div>`, {type:'payment', id});
-  }
-
-  document.getElementById('entity-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const values = Object.fromEntries(new FormData(e.target));
-    try {
-      if (formContext.type === 'contract') {
-        const amount = parseAmount(values.amount);
-        if (amount == null) { toast('Укажите сумму числом'); return; }
-        values.amount = amount; values.vatRate = Number(values.vatRate);
-        if (values.endDate && values.startDate && values.endDate < values.startDate) {
-          toast('Дата окончания раньше даты начала'); return;
-        }
-        const existing = state.contracts.find(x => x.id === formContext.id);
-        const entity = {...(existing || {}), ...values, id: existing?.id || uid('contract')};
-        await persistRow('/api/contracts', entity, existing, 'Изменения сохранены');
-      } else {
-        const amount = parseAmount(values.amount);
-        if (amount == null) { toast('Укажите сумму числом'); return; }
-        values.amount = amount;
-        const contract = contractById(values.contractId);
-        if (contract && values.status === 'paid') {
-          const otherPaid = state.payments.filter(x => x.contractId === contract.id && x.status === 'paid' && x.id !== formContext.id).reduce((s,x) => s + Number(x.amount), 0);
-          if (values.type === contract.direction && otherPaid + values.amount > Number(contract.amount)) {
-            if (!confirm(`Операция превысит лимит договора на ${money(otherPaid + values.amount - contract.amount)}. Сохранить?`)) return;
-          }
-        }
-        const existing = state.payments.find(x => x.id === formContext.id);
-        const entity = {...(existing || {}), ...values, id: existing?.id || uid('payment')};
-        await persistRow('/api/payments', entity, existing, 'Изменения сохранены');
-      }
-      closeModal();
-    } catch (error) { if (!quiet(error)) toast('Не удалось сохранить изменения'); }
-  });
-
   async function removeContract(id) {
     const contract = contractById(id);
-    const linked = state.payments.filter(p => p.contractId === id).length;
-    if (!confirm(linked ? `Удалить договор и связанные операции (${linked})?` : 'Удалить договор?')) return;
+    const kids = childrenOf(id).length;
+    const linked = state.payments.filter(p => p.contractId === id || childrenOf(id).some(k => k.id === p.contractId)).length;
+    const parts = [kids ? `спецификации (${kids})` : '', linked ? `операции (${linked})` : ''].filter(Boolean).join(' и ');
+    if (!confirm(parts ? `Удалить договор и связанные ${parts}?` : 'Удалить договор?')) return;
     try {
       await api('/api/contracts/' + encodeURIComponent(id) + '?version=' + contract.version, {method: 'DELETE'});
       await load();
@@ -1352,6 +1590,10 @@
       await load();
       toast('Операция удалена');
     } catch (error) { if (!quiet(error)) toast('Не удалось удалить операцию'); }
+  }
+  function renderAll() {
+    document.getElementById('datalists').innerHTML = counterpartyDatalist();
+    renderContracts(); renderPayments(); renderAnalytics(); renderDictionaries(); renderHistory();
   }
   function toast(message) {
     const el = document.getElementById('toast');
