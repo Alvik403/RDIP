@@ -249,21 +249,21 @@
     .tree-table tr.row-balance > td { background: #eef2fb; font-weight: 700; }
     .tree-table .name { display: inline-flex; gap: 8px; align-items: center; }
     .dash {
-      border-radius: var(--radius); padding: 18px 22px; margin-bottom: 16px; color: #e9eef7;
-      background: linear-gradient(180deg, #2a3446, #1f2838); box-shadow: var(--shadow);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 10px; margin-bottom: 16px;
+      color: var(--ink); background: var(--surface); box-shadow: var(--shadow);
     }
-    .dash-head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-bottom: 12px; }
-    .dash-head h3 { margin: 0; font-size: 15px; color: #fff; }
-    .dash-head span { font-size: 12px; color: #9aa7bd; }
-    .dash-row { display: grid; grid-template-columns: minmax(160px, 280px) minmax(0, 1fr) 150px; gap: 12px; align-items: center; margin: 7px 0; }
-    .dash-label { text-align: right; font-size: 13px; color: #c7d0df; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dash-label small { display: block; color: #8a97ad; font-size: 11px; }
-    .dash-track { position: relative; height: 34px; display: flex; align-items: center; min-width: 0; }
-    .dash-bar { height: 100%; border-radius: 3px; background: #1a8cff; min-width: 2px; max-width: 100%; transition: width .3s ease; }
-    .dash-bar.neg { background: #e05555; }
-    .dash-value { font-weight: 700; font-size: 14px; color: #fff; white-space: nowrap; }
-    .dash-value.neg { color: #ff9b9b; }
-    .dash-empty { color: #9aa7bd; font-size: 13px; }
+    .dash-head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+    .dash-head h3 { margin: 0; font-size: 15px; color: var(--ink); }
+    .dash-head span { font-size: 12px; color: var(--muted); }
+    .dash-row { display: grid; grid-template-columns: minmax(160px, 280px) minmax(0, 1fr) 150px; gap: 14px; align-items: center; margin: 8px 0; }
+    .dash-label { text-align: right; font-size: 13px; font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash-label small { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .dash-track { position: relative; height: 22px; display: flex; align-items: center; min-width: 0; background: #eef2f7; border-radius: 8px; overflow: hidden; }
+    .dash-bar { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #6f97ef, var(--blue)); min-width: 2px; max-width: 100%; transition: width .3s ease; }
+    .dash-bar.neg { background: linear-gradient(90deg, #f0a0a0, var(--red)); }
+    .dash-value { font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; }
+    .dash-value.neg { color: var(--red); }
+    .dash-empty { color: var(--muted); font-size: 13px; padding: 6px 0 10px; }
 
     /* ---------- справочники ---------- */
     .dict-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
