@@ -465,7 +465,7 @@
     ],
     payment: [
       {id:'documentCard', label:'Карта документа'},
-      {id:'number', label:'№'},
+      {id:'number', label:'Номер документа'},
       {id:'contractNumber', label:'Номер договора'},
       {id:'approvalDate', label:'Дата согласования', type:'date'},
       {id:'paymentDate', label:'Дата оплаты', type:'date'},
@@ -877,8 +877,8 @@
   /* ---------- договоры ---------- */
   const CONTRACT_COLS = [
     {label:'', w:44, cls:'expand-col'},
+    {label:'Карта документа', w:120},
     {label:'Номер договора', w:120},
-    {label:'Карта документа', w:110},
     {label:'Рассмотр.', w:100, sort:'reviewDate'},
     {label:'Регистр.', w:100},
     {label:'Контрагент', w:220},
@@ -954,8 +954,8 @@
         const open = expandedContracts.has(c.id) || openParents.has(c.id) || editingChild;
         return `<tr data-id="${esc(c.id)}">
           <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="Спецификации и платежи"><span class="chev">▸</span>${childCount ? `<span class="count">${childCount}</span>` : ''}</button></td>
-          <td data-field="number"><div class="main-cell" title="${esc(c.number)}">№ ${esc(c.number)}</div></td>
           <td data-field="documentCard">${cellText(c.documentCard)}</td>
+          <td data-field="number"><div class="main-cell" title="${esc(c.number)}">№ ${esc(c.number)}</div></td>
           <td data-field="reviewDate">${showDate(c.reviewDate || c.date)}</td>
           <td data-field="registrationDate">${showDate(c.registrationDate || c.date)}</td>
           <td data-field="counterparty"><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
@@ -1079,8 +1079,8 @@
   function contractEditRow(c) {
     return `<tr class="edit-row" id="contract-edit-row">
       <td class="expand-col"></td>
-      <td><input name="number" required value="${esc(c.number)}" placeholder="№" autocomplete="off"></td>
       <td><input name="documentCard" value="${esc(c.documentCard)}" placeholder="Карта" autocomplete="off"></td>
+      <td><input name="number" required value="${esc(c.number)}" placeholder="№" autocomplete="off"></td>
       <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}"></td>
       <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
       <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент" list="counterparty-list" oninput="applyContractFieldRules()"></td>
@@ -1108,10 +1108,8 @@
   /* ---------- платежи ---------- */
   const PAYMENT_COLS = [
     {label:'Карта документа', w:110},
-    {label:'№', w:110},
-    {label:'Начало согл.', w:110, sort:'approvalDate'},
-    {label:'Заверш. согл.', w:110, sort:'approvalEndDate'},
-    {label:'Дата 1С', w:100, sort:'postedDate'},
+    {label:'Номер документа', w:110},
+    {label:'Соглас.', w:100, sort:'approvalDate'},
     {label:'Оплата', w:100, sort:'paymentDate'},
     {label:'Исполнение', w:120},
     {label:'Договор', w:150},
@@ -1122,9 +1120,6 @@
     {label:'Без НДС', w:130, cls:'num'},
     {label:'Сумма оплаты', w:130, cls:'num'},
     {label:'Вид', w:150},
-    {label:'Вид затрат', w:160},
-    {label:'МВЗ', w:140},
-    {label:'Ключевой контрагент', w:200},
     {label:'Вид платежа', w:115},
     {label:'Подвид', w:110},
     {label:'БДДС', w:170},
@@ -1162,8 +1157,6 @@
           <td data-field="documentCard">${cellText(p.documentCard)}</td>
           <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
-          <td data-field="approvalEndDate">${showDate(p.approvalEndDate)}</td>
-          <td data-field="postedDate">${showDate(p.postedDate)}</td>
           <td data-field="paymentDate">${showDate(p.paymentDate)}</td>
           <td class="cell-center">${executionBadge(p.status)}</td>
           <td data-field="contractId">${cellText(c ? contractLabel(c) : '')}</td>
@@ -1174,9 +1167,6 @@
           ${moneyCell(wovat)}
           ${moneyCell(p.amount, '', 'amount')}
           <td data-field="documentKind">${cellText(payDocLabel[p.documentKind] || '')}</td>
-          <td data-field="costType">${cellText(p.costType)}</td>
-          <td data-field="mvz">${cellText(p.mvz)}</td>
-          <td data-field="keyCounterparty">${cellText(p.keyCounterparty)}</td>
           <td class="cell-center" data-field="type"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${payTypeLabel[p.type] || '—'}</span></td>
           <td class="cell-center" data-field="subtype">${labels[p.subtype] || '—'}</td>
           <td data-field="bdds">${cellText(p.bdds)}</td>
@@ -1252,9 +1242,7 @@
     return `<tr class="edit-row" id="payment-edit-row">
       <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(p.number)}" placeholder="П-001" autocomplete="off"></td>
-      <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}" title="Начало согласования"></td>
-      <td><input name="approvalEndDate" type="date" value="${esc(p.approvalEndDate || '')}" title="Завершение согласования"></td>
-      <td><input name="postedDate" type="date" value="${esc(p.postedDate || '')}" title="Дата 1С"></td>
+      <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}" title="Дата согласования"></td>
       <td><input name="paymentDate" type="date" value="${esc(p.paymentDate || '')}" title="Можно оставить пустой, пока оплата не прошла"></td>
       <td class="cell-center">${executionBadge(p.paymentDate ? (p.status === 'cancelled' ? 'cancelled' : 'paid') : 'planned')}</td>
       <td><select name="contractId" onchange="autofillPayment()"><option value="">Договор</option>${optionTags(paymentContractOptions(), p.contractId || '')}</select></td>
@@ -1265,9 +1253,6 @@
       <td class="cell-number">—</td>
       <td><input name="amount" inputmode="decimal" value="${p.amount ?? ''}" placeholder="Можно пустым" title="Можно оставить пустой, пока оплата не прошла" autocomplete="off"></td>
       <td><select name="documentKind" onchange="applyPaymentFieldRules()">${optionTags(PAYMENT_DOC, p.documentKind || 'contract')}</select></td>
-      <td><input name="costType" value="${esc(p.costType || '')}" placeholder="Вид затрат" autocomplete="off"></td>
-      <td><input name="mvz" value="${esc(p.mvz || '')}" placeholder="МВЗ" autocomplete="off"></td>
-      <td><input name="keyCounterparty" value="${esc(p.keyCounterparty || '')}" placeholder="Ключевой контрагент" list="counterparty-list" autocomplete="off"></td>
       <td><select name="type">${optionTags(PAY_TYPES, p.type || 'expense')}</select></td>
       <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || 'invoice')}</select></td>
       <td>${dictSelect('bdds', 'bdds', p.bdds || '')}</td>
@@ -1683,11 +1668,6 @@
       values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
       values.paymentDate = String(values.paymentDate || '').trim();
       values.approvalDate = String(values.approvalDate || '').trim();
-      values.approvalEndDate = String(values.approvalEndDate || '').trim();
-      values.postedDate = String(values.postedDate || '').trim();
-      values.costType = String(values.costType || '').trim();
-      values.mvz = String(values.mvz || '').trim();
-      values.keyCounterparty = String(values.keyCounterparty || '').trim();
       values.date = values.paymentDate;
       values.specificationId = '';
       const contract = contractById(values.contractId);

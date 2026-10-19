@@ -1737,8 +1737,8 @@ def contract_excel_values(contract, by_id):
         number = "    " + number
     funding = by_id.get(contract.get("fundingContractId") or "")
     return [
-        number,
         contract.get("documentCard") or "",
+        number,
         excel_date(contract.get("reviewDate") or contract.get("date")),
         excel_date(contract.get("registrationDate") or contract.get("date")),
         contract.get("counterparty") or "",
@@ -1767,7 +1767,7 @@ def sheet_contracts(wb, contracts):
     ws = wb.active
     ws.title = "Договоры"
     headers = [
-        "Номер договора", "Карта документа", "Дата рассмотрения", "Дата регистрации", "Контрагент", "Вид", "Предмет",
+        "Карта документа", "Номер договора", "Дата рассмотрения", "Дата регистрации", "Контрагент", "Вид", "Предмет",
         "Сумма с НДС", "Ставка НДС", "Без НДС", "НДС", "Источник финансирования", "Проект", "Ответственный",
         "Вид документа", "Подвид", "Категория", "Договор-основание", "Прочие расходы", "Остаток лимита", "Остаток оплат", "% авансирования по условиям договора", "Комментарий",
     ]
@@ -1830,11 +1830,6 @@ def payment_excel_values(payment, by_id):
         display_choice(payment.get("paymentKind") or "", PAY_KIND_LABELS),
         payment.get("responsible") or "",
         payment.get("comment") or "",
-        excel_date(payment.get("approvalEndDate")),
-        excel_date(payment.get("postedDate")),
-        payment.get("costType") or "",
-        payment.get("mvz") or "",
-        payment.get("keyCounterparty") or "",
         display_choice(payment.get("status") or "", PAY_STATUS_LABELS),
     ]
 
@@ -1843,12 +1838,11 @@ def sheet_payments(wb, contracts, payments):
     ws = wb.active
     ws.title = "Платежи"
     headers = [
-        "Карта документа", "№", "Дата согласования", "Дата оплаты", "Договор", "Контрагент",
+        "Карта документа", "Номер документа", "Дата согласования", "Дата оплаты", "Договор", "Контрагент",
         "Источник финансирования", "Сумма с НДС", "Ставка НДС", "НДС", "Без НДС", "Сумма оплаты",
-        "Вид", "Вид платежа", "Подвид", "БДДС", "ЦФО", "Вид оплаты", "Ответственный", "Комментарий",
-        "Заверш. согл.", "Дата 1С", "Вид затрат", "МВЗ", "Ключевой контрагент", "Статус",
+        "Вид", "Вид платежа", "Подвид", "БДДС", "ЦФО", "Вид оплаты", "Ответственный", "Комментарий", "Статус",
     ]
-    kinds = "ttddtttmmmmmttttttttddtttt"
+    kinds = "ttddtttmmmmmttttttttt"
     ws.append(headers)
     by_id = {item["id"]: item for item in contracts}
     grouped = {}
@@ -1861,13 +1855,13 @@ def sheet_payments(wb, contracts, payments):
         items = sorted(grouped[contract_id], key=lambda item: text(item.get("approvalDate")), reverse=True)
         total = sum((excel_dec(item.get("amount")) for item in items), Decimal(0)).quantize(MONEY)
         title = payment_contract_label(items[0], by_id)
-        summary = [title] + [None] * 10 + [total] + [None] * 14
+        summary = [title] + [None] * 10 + [total] + [None] * 9
         write_excel_row(ws, summary, kinds, bold=True, fill=FILL_GROUP)
         start = ws.max_row + 1
         for payment in items:
             write_excel_row(ws, payment_excel_values(payment, by_id), kinds)
         group_excel_rows(ws, start, ws.max_row, 1)
-    finish_excel_sheet(ws, [18, 18, 18, 16, 28, 32, 24, 16, 12, 14, 16, 16, 24, 16, 16, 22, 22, 14, 18, 32, 16, 16, 18, 16, 28, 16])
+    finish_excel_sheet(ws, [18, 18, 18, 16, 28, 32, 24, 16, 12, 14, 16, 16, 24, 16, 16, 22, 22, 14, 18, 32, 16])
 
 
 def excel_share(part, whole):
