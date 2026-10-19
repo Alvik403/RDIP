@@ -6,10 +6,11 @@
   <title>Реестр ДиП</title>
   <style>
     :root {
-      --navy: #17233c;
-      --navy-2: #223252;
-      --blue: #3267e3;
-      --blue-soft: #edf3ff;
+      --navy: #145550;
+      --navy-2: #1c6a64;
+      --blue: #62b3ac;
+      --blue-deep: #146e68;
+      --blue-soft: #e5f6f4;
       --green: #15a77a;
       --red: #df5555;
       --amber: #d99118;
@@ -38,20 +39,20 @@
     .sidebar {
       position: fixed; inset: 0 auto 0 0; width: 248px;
       display: flex; flex-direction: column; padding: 24px 16px;
-      color: #fff; background: linear-gradient(180deg, var(--navy), #121b2f);
+      color: #fff; background: linear-gradient(180deg, var(--navy), #0e3331);
       transition: transform .2s ease;
     }
     .app.sidebar-hidden .sidebar { transform: translateX(-100%); pointer-events: none; }
     .brand { display: flex; align-items: center; padding: 5px 10px 28px; }
-    .brand strong { display: block; font-size: 16px; line-height: 1.35; }
+    .brand strong { display: block; font-size: 16px; line-height: 1.35; color: #fff; }
     .nav { display: flex; flex: 1; flex-direction: column; gap: 7px; }
     .nav button {
       width: 100%; border: 0; border-radius: 10px; padding: 11px 13px;
-      display: flex; align-items: center; gap: 11px; color: #aeb9ca;
+      display: flex; align-items: center; gap: 11px; color: #e7f7f5;
       text-align: left; background: transparent; transition: .18s ease;
     }
-    .nav button:hover { color: white; background: rgba(255,255,255,.06); }
-    .nav button.active { color: white; background: var(--navy-2); box-shadow: inset 3px 0 var(--blue); }
+    .nav button:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .nav button.active { color: #103e3b; background: var(--blue); font-weight: 700; }
     .nav .icon { width: 21px; font-size: 17px; text-align: center; }
     .nav button[data-page="history"] { margin-top: auto; }
     main { grid-column: 2; min-width: 0; }
@@ -66,7 +67,7 @@
       width: 38px; height: 38px; flex: none; border: 1px solid var(--line); border-radius: 9px;
       color: var(--ink); background: #fff; font-size: 18px; line-height: 1;
     }
-    .sidebar-toggle:hover { color: var(--blue); border-color: #b8ccf5; background: var(--blue-soft); }
+    .sidebar-toggle:hover { color: var(--blue-deep); border-color: #b7ddd8; background: var(--blue-soft); }
     .sync { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
     .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
     .content { padding: 20px 28px 28px; max-width: none; }
@@ -90,7 +91,7 @@
       color: var(--ink); background: white; font-weight: 600; transition: .15s ease;
     }
     .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,60,.1); }
-    .btn.primary { border-color: var(--blue); color: white; background: var(--blue); }
+    .btn.primary { border-color: #4faba4; color: #103e3b; background: var(--blue); }
     .btn.small { padding: 5px 9px; font-size: 12px; }
     .cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .card {
@@ -148,7 +149,7 @@
     .table-wrap.can-edit .payment-subtable tr[data-payment-id] td,
     .table-wrap.can-edit .spec-head[data-spec-id],
     #dictionaries-grid.can-edit .dict-list li[data-id] span { cursor: cell; }
-    th.sortable:hover { color: var(--blue); }
+    th.sortable:hover { color: var(--blue-deep); }
     td { padding: 0 8px; border-right: 1px solid #e0e4ea; border-bottom: 1px solid #e0e4ea; vertical-align: middle; }
     th:last-child, td:last-child { border-right: 0; }
     tbody tr:hover > td { background: #fbfcff; }
@@ -165,25 +166,25 @@
     }
     .data-table input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
     .data-table select:disabled, .data-table input:disabled { background: #f3f5f8; color: #8b95a5; }
-    .data-table .edit-row > td { background: #f5f8ff; border-color: #cbd8f5; padding: 0 4px; }
+    .data-table .edit-row > td { background: #f4fbfa; border-color: #c5e4e0; padding: 0 4px; }
     .data-table td.actions-col, .data-table th.actions-col {
       position: sticky; right: 0; z-index: 2; background: #fff; padding: 0 4px;
       box-shadow: -6px 0 8px rgba(20, 35, 60, .06);
     }
     .data-table th.actions-col { z-index: 4; background: #f3f5f8; }
-    .data-table .edit-row td.actions-col { background: #f5f8ff; }
+    .data-table .edit-row td.actions-col { background: #f4fbfa; }
     .data-table tbody tr:hover td.actions-col { background: #fbfcff; }
     .data-table td.expand-col { text-align: center; padding: 0 2px; }
     .data-table tr.row-child > td { background: #fafbfe; }
-    .data-table tr.row-child > td:first-child { box-shadow: inset 3px 0 #c7d4f0; }
+    .data-table tr.row-child > td:first-child { box-shadow: inset 3px 0 #b7ddd8; }
     .expand-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 3px;
       border: 1px solid var(--line); border-radius: 7px; min-width: 30px; height: 28px; padding: 0 5px;
       color: var(--muted); background: #fff; font-size: 11px; font-weight: 650; line-height: 1;
     }
     .expand-btn .count { font-size: 10px; font-weight: 600; }
-    .expand-btn:hover { color: var(--blue); border-color: #b8ccf5; background: var(--blue-soft); }
-    .expand-btn.open { color: var(--blue); border-color: #9eb8f0; background: var(--blue-soft); }
+    .expand-btn:hover { color: var(--blue-deep); border-color: #b7ddd8; background: var(--blue-soft); }
+    .expand-btn.open { color: var(--blue-deep); border-color: #8ec9c3; background: var(--blue-soft); }
     .expand-btn .chev { display: inline-block; transition: transform .15s ease; }
     .expand-btn.open .chev { transform: rotate(90deg); }
     tr.detail-row > td { padding: 0; height: auto; max-height: none; white-space: normal; background: #f7f9fc; border-color: #dce3ef; }
@@ -217,7 +218,7 @@
       font-size: 11px; font-weight: 650; white-space: nowrap;
     }
     .badge.green { color: #087b59; background: #e5f7f1; }
-    .badge.blue { color: #285ac9; background: #e9f0ff; }
+    .badge.blue { color: var(--blue-deep); background: #d9f3f0; }
     .badge.gray { color: #667287; background: #eef1f5; }
     .badge.red { color: #b63939; background: #fdeaea; }
     .badge.amber { color: #9e680b; background: #fff3d9; }
@@ -226,7 +227,7 @@
     .progress.over span { background: var(--red); }
     .row-actions { display: flex; justify-content: flex-end; gap: 2px; }
     .icon-btn { border: 0; border-radius: 7px; padding: 5px 7px; color: var(--muted); background: transparent; }
-    .icon-btn:hover { color: var(--blue); background: var(--blue-soft); }
+    .icon-btn:hover { color: var(--blue-deep); background: var(--blue-soft); }
     .icon-btn.delete:hover { color: var(--red); background: #fff0f0; }
     .empty { padding: 42px 20px; text-align: center; color: var(--muted); }
     .history-panel { max-width: 860px; margin: 0 auto; }
@@ -242,11 +243,11 @@
     .tree-table tr.row-expense > td { background: #fff; }
     .tree-table tr.row-expense > td:first-child { box-shadow: inset 3px 0 #f0c674; }
     .tree-table tr.row-spec > td { background: #fafbfe; color: #475569; }
-    .tree-table tr.row-spec > td:first-child { padding-left: 24px; box-shadow: inset 3px 0 #c7d4f0; }
+    .tree-table tr.row-spec > td:first-child { padding-left: 24px; box-shadow: inset 3px 0 #b7ddd8; }
     .tree-table tr.row-pay > td { background: #fffdf7; color: #475569; }
     .tree-table tr.row-free > td { background: #fff8ec; font-weight: 650; }
     .tree-table tr.row-total > td { background: #eef3ea; font-weight: 700; }
-    .tree-table tr.row-balance > td { background: #eef2fb; font-weight: 700; }
+    .tree-table tr.row-balance > td { background: #e7f5f3; font-weight: 700; }
     .tree-table .name { display: inline-flex; gap: 8px; align-items: center; }
     .dash {
       border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 10px; margin-bottom: 16px;
@@ -259,7 +260,7 @@
     .dash-label { text-align: right; font-size: 13px; font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dash-label small { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 500; }
     .dash-track { position: relative; height: 22px; display: flex; align-items: center; min-width: 0; background: #eef2f7; border-radius: 8px; overflow: hidden; }
-    .dash-bar { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #6f97ef, var(--blue)); min-width: 2px; max-width: 100%; transition: width .3s ease; }
+    .dash-bar { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #8fd0cb, var(--blue)); min-width: 2px; max-width: 100%; transition: width .3s ease; }
     .dash-bar.neg { background: linear-gradient(90deg, #f0a0a0, var(--red)); }
     .dash-value { font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; }
     .dash-value.neg { color: var(--red); }
@@ -281,7 +282,7 @@
       outline: none; color: var(--ink); background: white;
     }
     input[type="checkbox"] { width: auto; }
-    input:focus, select:focus, textarea:focus { border-color: #7ca0f1; box-shadow: 0 0 0 3px #edf3ff; }
+    input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
     .toast {
       position: fixed; right: 24px; bottom: 24px; z-index: 40; padding: 12px 16px;
       border-radius: 10px; color: white; background: #1d2b46; box-shadow: var(--shadow);
@@ -335,7 +336,10 @@
       <section class="page" id="page-contracts">
         <div class="page-head">
           <div><h2>Договоры</h2><p>Лимиты, исполнение и остатки в одном реестре</p></div>
-          <button class="btn primary" data-requires="edit" onclick="startContractRow()">+ Добавить строку</button>
+          <div class="page-actions">
+            <button type="button" class="btn" onclick="exportExcel('contracts')">Выгрузить Excel</button>
+            <button class="btn primary" data-requires="edit" onclick="startContractRow()">+ Добавить строку</button>
+          </div>
         </div>
         <div class="toolbar">
           <select class="filter filter-field" id="contract-filter-field" onchange="syncFilterValue('contract')"></select>
@@ -350,7 +354,10 @@
       <section class="page" id="page-payments">
         <div class="page-head">
           <div><h2>Платежи и поступления</h2><p>Фактические и плановые операции по договорам и без договора</p></div>
-          <button class="btn primary" data-requires="edit" onclick="startPaymentRow()">+ Добавить строку</button>
+          <div class="page-actions">
+            <button type="button" class="btn" onclick="exportExcel('payments')">Выгрузить Excel</button>
+            <button class="btn primary" data-requires="edit" onclick="startPaymentRow()">+ Добавить строку</button>
+          </div>
         </div>
         <div class="toolbar">
           <select class="filter filter-field" id="payment-filter-field" onchange="syncFilterValue('payment')"></select>
@@ -365,6 +372,7 @@
       <section class="page active" id="page-analytics">
         <div class="page-head">
           <div><h2>Финансовый дашборд</h2><p>Доходные договоры, привязанные к ним расходы и свободный остаток</p></div>
+          <button type="button" class="btn" onclick="exportExcel('analytics')">Выгрузить Excel</button>
         </div>
         <div class="cards" id="analytics-cards"></div>
         <div class="dash" id="analytics-dash"></div>
@@ -389,6 +397,7 @@
       <section class="page" id="page-dictionaries">
         <div class="page-head">
           <div><h2>Справочники</h2><p>Списки ЦФО, статей БДДС и проектов для выбора в договорах и платежах</p></div>
+          <button type="button" class="btn" onclick="exportExcel('dictionaries')">Выгрузить Excel</button>
         </div>
         <div class="dict-grid" id="dictionaries-grid"></div>
       </section>
@@ -397,7 +406,8 @@
         <div class="page-head">
           <div><h2>История изменений</h2><p>Журнал, выгрузка и загрузка договоров и платежей</p></div>
           <div class="page-actions">
-            <button type="button" class="btn" onclick="exportRegistry()">Экспорт</button>
+            <button type="button" class="btn" onclick="exportExcel('history')">Выгрузить Excel</button>
+            <button type="button" class="btn" onclick="exportRegistry()">Экспорт CSV</button>
             <button type="button" class="btn primary" data-requires="edit" onclick="document.getElementById('import-file').click()">Импорт</button>
             <input id="import-file" type="file" accept=".csv,text/csv" hidden onchange="importRegistry(this)">
           </div>
@@ -491,6 +501,21 @@
   function cellText(value) {
     const text = value == null || value === '' ? '—' : String(value);
     return `<span title="${esc(text)}">${esc(text)}</span>`;
+  }
+  function percentCell(value, field = '') {
+    const attr = field ? ` data-field="${esc(field)}"` : '';
+    if (value == null || value === '' || !Number.isFinite(Number(value))) return `<td class="cell-center"${attr}>—</td>`;
+    const num = Math.round(Number(value) * 100) / 100;
+    return `<td class="cell-center${num > 100 ? ' neg' : ''}"${attr}>${num}%</td>`;
+  }
+  function factPercent(fact, limit) {
+    if (!limit) return null;
+    return Math.round(Number(fact) / Number(limit) * 10000) / 100;
+  }
+  function executionBadge(status) {
+    if (status === 'paid') return '<span class="badge green">Исполнен</span>';
+    if (status === 'cancelled') return '<span class="badge red">Отменен</span>';
+    return '<span class="badge amber">Не исполнен</span>';
   }
   function moneyCell(value, cls = '', field = '') {
     const num = Number(value) || 0;
@@ -864,6 +889,7 @@
     {label:'Прочие расх.', w:74},
     {label:'Ост. лимита', w:130, cls:'num'},
     {label:'Ост. оплат', w:130, cls:'num'},
+    {label:'% авансирования', w:140, cls:'center'},
     {label:'Коммент.', w:260},
     {label:'', w:88, cls:'actions-col'}
   ];
@@ -930,6 +956,7 @@
           <td class="cell-center" data-field="otherExpense">${c.otherExpense ? 'да' : '—'}</td>
           ${limitRem === null ? '<td class="cell-number">—</td>' : moneyCell(limitRem)}
           ${moneyCell(payRem)}
+          ${percentCell(c.advancePercent, 'advancePercent')}
           <td data-field="comment">${cellText(c.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${c.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${c.id}')">⌫</button></div>` : ''}</td>
         </tr>${editingChild ? contractEditRow(editItem) : ''}${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
@@ -1035,6 +1062,7 @@
       <td class="cell-center"><input type="checkbox" name="otherExpense" ${c.otherExpense ? 'checked' : ''} title="Прочие расходы"></td>
       <td class="cell-number">—</td>
       <td class="cell-number">—</td>
+      <td><input name="advancePercent" inputmode="decimal" value="${c.advancePercent ?? ''}" placeholder="%" title="% авансирования по условиям договора" autocomplete="off"></td>
       <td><input name="comment" value="${esc(c.comment)}" placeholder="Комментарий"></td>
       <td class="actions-col"><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="saveContractRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
     </tr>`;
@@ -1046,6 +1074,7 @@
     {label:'Номер документа', w:110},
     {label:'Соглас.', w:100, sort:'approvalDate'},
     {label:'Оплата', w:100, sort:'paymentDate'},
+    {label:'Исполнение', w:120},
     {label:'Договор', w:150},
     {label:'Контрагент', w:220},
     {label:'Источник финансирования', w:190},
@@ -1076,7 +1105,7 @@
   function renderPayments() {
     const rows = filteredPayments();
     const editItem = editing?.type === 'payment'
-      ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', documentKind:'contract', subtype:'invoice', status:'paid', approvalVatRate:DEFAULT_VAT} : state.payments.find(p => p.id === editing.id))
+      ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', documentKind:'contract', subtype:'invoice', status:'planned', approvalVatRate:DEFAULT_VAT} : state.payments.find(p => p.id === editing.id))
       : null;
     const body = `${editItem && editing.isNew ? paymentEditRow(editItem) : ''}${rows.map(p => {
         if (editItem && p.id === editing.id) return paymentEditRow(p);
@@ -1092,6 +1121,7 @@
           <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
           <td data-field="paymentDate">${showDate(p.paymentDate)}</td>
+          <td class="cell-center">${executionBadge(p.status)}</td>
           <td data-field="contractId">${cellText(c ? contractLabel(c) : '')}</td>
           <td data-field="counterparty">${cellText(p.counterparty || c?.counterparty)}</td>
           <td data-field="fundingContractId">${cellText(funding)}</td>
@@ -1177,13 +1207,14 @@
       <td><input name="number" required value="${esc(p.number)}" placeholder="П-001" autocomplete="off"></td>
       <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}"></td>
       <td><input name="paymentDate" type="date" value="${esc(p.paymentDate || '')}" title="Можно оставить пустой, пока оплата не прошла"></td>
+      <td class="cell-center">${executionBadge(p.paymentDate ? (p.status === 'cancelled' ? 'cancelled' : 'paid') : 'planned')}</td>
       <td><select name="contractId" onchange="autofillPayment()"><option value="">Договор</option>${optionTags(paymentContractOptions(), p.contractId || '')}</select></td>
       <td><input name="counterparty" required value="${esc(p.counterparty || c?.counterparty || '')}" placeholder="Контрагент" list="counterparty-list"></td>
       <td><select name="fundingContractId">${optionTags(fundingOptions(), p.fundingContractId || '')}</select></td>
       <td><input name="approvalAmount" inputmode="decimal" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма" autocomplete="off"></td>
       <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? DEFAULT_VAT)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
-      <td><input name="amount" inputmode="decimal" required value="${p.amount ?? ''}" placeholder="Оплата" autocomplete="off"></td>
+      <td><input name="amount" inputmode="decimal" value="${p.amount ?? ''}" placeholder="Можно пустым" title="Можно оставить пустой, пока оплата не прошла" autocomplete="off"></td>
       <td><select name="documentKind" onchange="applyPaymentFieldRules()">${optionTags(PAYMENT_DOC, p.documentKind || 'contract')}</select></td>
       <td><select name="type">${optionTags(PAY_TYPES, p.type || 'expense')}</select></td>
       <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || 'invoice')}</select></td>
@@ -1209,7 +1240,8 @@
     {label:'Остаток оплат', w:135, cls:'num'},
     {label:'Законтрактовано расходов', w:150, cls:'num'},
     {label:'Остаток (доход − расход)', w:150, cls:'num'},
-    {label:'Прогресс', w:110, cls:'center'}
+    {label:'% по условию договора', w:130, cls:'center'},
+    {label:'% Факт', w:90, cls:'center'}
   ];
   function progressCell(fact, limit) {
     if (!limit) return '—';
@@ -1257,13 +1289,14 @@
       moneyCell(limit - fact),
       extra.contracted == null ? EMPTY : moneyCell(extra.contracted),
       extra.balance == null ? EMPTY : moneyCell(extra.balance),
-      `<td class="cell-center">${progressCell(fact, limit)}</td>`
+      percentCell(c.advancePercent),
+      percentCell(factPercent(fact, limit))
     ];
     let html = treeRow(cls, parts);
     if (extra.expandable && kids.length && isOpen(key)) {
       kids.forEach(k => { html += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
       const free = contractLimitRemainder(c);
-      if (free != null) html += treeRow('row-spec', [EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
+      if (free != null) html += treeRow('row-spec', [EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
     }
     return html;
   }
@@ -1274,14 +1307,14 @@
     let html = treeRow('row-pay', [
       `<td class="expand-col">${expandBtn(key, list.length)}</td>`,
       `<td>Счета без договора (${list.length})</td>`, EMPTY, EMPTY, '<td class="cell-center"><span class="badge gray">Счета</span></td>', EMPTY,
-      moneyCell(total), moneyCell(paid), moneyCell(total - paid), EMPTY, EMPTY, `<td class="cell-center">${progressCell(paid, total)}</td>`
+      moneyCell(total), moneyCell(paid), moneyCell(total - paid), EMPTY, EMPTY, EMPTY, percentCell(factPercent(paid, total))
     ]);
     if (isOpen(key)) {
       list.forEach(p => {
         html += treeRow('row-spec', [
           EMPTY, `<td title="${esc(p.number)}">${esc(p.number)} · ${showDate(p.paymentDate || p.date)}${p.comment ? ' · ' + esc(p.comment) : ''}</td>`, EMPTY,
           `<td>${cellText(p.counterparty)}</td>`, `<td class="cell-center">${payDocLabel[p.documentKind] || '—'}</td>`, `<td>${cellText(p.project)}</td>`,
-          moneyCell(p.amount), moneyCell(p.status === 'paid' ? p.amount : 0), EMPTY, EMPTY, EMPTY, `<td class="cell-center">${statusBadge(p.status)}</td>`
+          moneyCell(p.amount), moneyCell(p.status === 'paid' ? p.amount : 0), EMPTY, EMPTY, EMPTY, EMPTY, percentCell(factPercent(p.status === 'paid' ? p.amount : 0, p.amount))
         ]);
       });
     }
@@ -1346,16 +1379,16 @@
       rows += treeRow('row-free', [
         `<td class="expand-col">${expandBtn('nofunding', orphans.length + (orphanFree.length ? 1 : 0))}</td>`,
         '<td>[!] Без источника финансирования</td>', EMPTY, EMPTY, EMPTY, EMPTY,
-        moneyCell(total), moneyCell(fact), moneyCell(total - fact), EMPTY, EMPTY, EMPTY
+        moneyCell(total), moneyCell(fact), moneyCell(total - fact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(fact, total))
       ]);
       if (isOpen('nofunding') || filtering) {
         visibleOrphans.forEach(c => { rows += contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true}); });
         if (!filtering) rows += freePaymentsRows(orphanFree, 'free-nofunding');
       }
     }
-    rows += treeRow('row-total', ['<td></td><td>Итого доходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit), moneyCell(incomeFact), moneyCell(incomeLimit - incomeFact), EMPTY, EMPTY, EMPTY]);
-    rows += treeRow('row-total', ['<td></td><td>Итого расходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(expenseLimit), moneyCell(expenseFact), moneyCell(expenseLimit - expenseFact), EMPTY, EMPTY, EMPTY]);
-    rows += treeRow('row-balance', ['<td></td><td>Остаток (доход − расход)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit - expenseLimit), moneyCell(incomeFact - expenseFact), moneyCell((incomeLimit - incomeFact) - (expenseLimit - expenseFact)), EMPTY, EMPTY, EMPTY]);
+    rows += treeRow('row-total', ['<td></td><td>Итого доходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit), moneyCell(incomeFact), moneyCell(incomeLimit - incomeFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(incomeFact, incomeLimit))]);
+    rows += treeRow('row-total', ['<td></td><td>Итого расходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(expenseLimit), moneyCell(expenseFact), moneyCell(expenseLimit - expenseFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(expenseFact, expenseLimit))]);
+    rows += treeRow('row-balance', ['<td></td><td>Остаток (доход − расход)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit - expenseLimit), moneyCell(incomeFact - expenseFact), moneyCell((incomeLimit - incomeFact) - (expenseLimit - expenseFact)), EMPTY, EMPTY, EMPTY, EMPTY]);
     document.getElementById('analytics-tree').innerHTML = `<table class="tree-table" style="width:${tableWidth(TREE_COLS)}px">${colgroup(TREE_COLS)}${headRow(TREE_COLS)}<tbody>${rows}</tbody></table>`;
     document.getElementById('analytics-expand-all').textContent = analyticsAllOpen ? 'Свернуть всё' : 'Развернуть всё';
 
@@ -1427,6 +1460,18 @@
     ].join('');
     box.hidden = false;
     box.innerHTML = `<div class="panel-body"><h3>Результат импорта</h3><p>Добавлено договоров: ${report.addedContracts}. Платежей: ${report.addedPayments}.</p>${lists || '<p>Все строки загружены.</p>'}</div>`;
+  }
+  async function exportExcel(page) {
+    const names = {contracts:'Договоры.xlsx', payments:'Платежи.xlsx', analytics:'Аналитика.xlsx', dictionaries:'Справочники.xlsx', history:'История.xlsx'};
+    const response = await fetch('/api/export.xlsx?page=' + encodeURIComponent(page), {credentials:'same-origin'});
+    if (response.status === 401) { location.href = '/login'; return; }
+    if (!response.ok) { toast('Не удалось выгрузить Excel'); return; }
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = names[page] || 'export.xlsx';
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
   async function exportRegistry() {
     const response = await fetch('/api/export', {credentials: 'same-origin'});
@@ -1569,9 +1614,10 @@
       if (!required.every(input => input.reportValidity())) return;
       const values = rowValues('payment-edit-row');
       if (!validateRegistryFields(values)) return;
-      const amount = parseAmount(values.amount);
+      const amountRaw = String(values.amount ?? '').trim();
+      const amount = amountRaw ? parseAmount(amountRaw) : 0;
       const approval = parseAmount(values.approvalAmount);
-      if (amount == null || (String(values.approvalAmount || '').trim() && approval == null)) return rejectRow('Укажите сумму числом');
+      if ((amountRaw && amount == null) || (String(values.approvalAmount || '').trim() && approval == null)) return rejectRow('Укажите сумму числом');
       if (values.documentKind === 'contract' && !values.contractId) return rejectRow('Для счета по договору выберите договор');
       if (values.documentKind !== 'contract') values.contractId = '';
       values.amount = amount;

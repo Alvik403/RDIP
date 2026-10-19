@@ -9,14 +9,17 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 import jwt
 import psycopg
-from fastapi import Body, FastAPI, HTTPException, Request
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from jwt import PyJWKClient
 from psycopg.rows import dict_row
@@ -146,6 +149,7 @@ CREATE TABLE IF NOT EXISTS dictionaries (
 );
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS parent_contract_id text NOT NULL DEFAULT '';
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS funding_contract_id text NOT NULL DEFAULT '';
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS advance_percent numeric(6,2);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS counterparty text NOT NULL DEFAULT '';
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS funding_contract_id text NOT NULL DEFAULT '';
 ALTER TABLE payments ALTER COLUMN contract_id DROP NOT NULL;
@@ -175,6 +179,16 @@ def transaction():
         raise
     finally:
         conn.close()
+
+
+def optional_percent(value):
+    raw = text(value).strip().replace("%", "").replace(",", ".")
+    if not raw:
+        return None
+    number = parse_money(raw)
+    if number is None:
+        raise HTTPException(400, "Укажите процент числом")
+    return number
 
 
 def money(value) -> Decimal:
@@ -323,6 +337,7 @@ def contract_from_row(row) -> dict:
         "otherExpense": row["other_expense"],
         "parentContractId": row.get("parent_contract_id") or "",
         "fundingContractId": row.get("funding_contract_id") or "",
+        "advancePercent": None if row.get("advance_percent") is None else json_money(row["advance_percent"]),
         "version": row["version"],
     }
 
@@ -490,6 +505,7 @@ def normalize_contract(payload: dict, existing: dict | None) -> dict:
         "otherExpense": direction == "expense" and as_bool(payload.get("otherExpense")),
         "parentContractId": parent_id,
         "fundingContractId": funding_id,
+        "advancePercent": optional_percent(payload.get("advancePercent")),
         "version": int((existing or {}).get("version") or 1),
     }
 
@@ -585,7 +601,7 @@ def public_copy(entity: dict) -> dict:
 CONTRACT_SQL = """
 id, number, date, counterparty, subject, direction, kind, amount, vat_rate, project, responsible,
 start_date, end_date, status, comment, review_date, registration_date, document_card, funding_source,
-amount_without_vat, document_kind, category, other_expense, parent_contract_id, funding_contract_id, version
+amount_without_vat, document_kind, category, other_expense, parent_contract_id, funding_contract_id, advance_percent, version
 """
 
 
@@ -596,7 +612,7 @@ def contract_params(entity: dict, version: int):
         entity["responsible"], entity["startDate"], entity["endDate"], entity["status"], entity["comment"],
         entity["reviewDate"], entity["registrationDate"], entity["documentCard"], entity["fundingSource"],
         entity["amountWithoutVat"], entity["documentKind"], entity["category"], entity["otherExpense"],
-        entity.get("parentContractId") or "", entity.get("fundingContractId") or "", version,
+        entity.get("parentContractId") or "", entity.get("fundingContractId") or "", entity.get("advancePercent"), version,
     )
 
 
@@ -611,12 +627,12 @@ def upsert_contract(conn, entity: dict, version: int):
     number=%s, date=%s, counterparty=%s, subject=%s, direction=%s, kind=%s, amount=%s, vat_rate=%s,
     project=%s, responsible=%s, start_date=%s, end_date=%s, status=%s, comment=%s, review_date=%s,
     registration_date=%s, document_card=%s, funding_source=%s, amount_without_vat=%s, document_kind=%s,
-    category=%s, other_expense=%s, parent_contract_id=%s, funding_contract_id=%s, version=%s
+    category=%s, other_expense=%s, parent_contract_id=%s, funding_contract_id=%s, advance_percent=%s, version=%s
     """
     params = contract_params(entity, version)[1:] + (entity["id"],)
     conn.execute(f"UPDATE contracts SET {assignments} WHERE id = %s", params)
     if conn.execute("SELECT 1 FROM contracts WHERE id = %s", (entity["id"],)).fetchone() is None:
-        conn.execute(f"INSERT INTO contracts ({CONTRACT_SQL}) VALUES ({', '.join(['%s'] * 26)})", contract_params(entity, version))
+        conn.execute(f"INSERT INTO contracts ({CONTRACT_SQL}) VALUES ({', '.join(['%s'] * 27)})", contract_params(entity, version))
 
 
 def upsert_dictionary(conn, entity: dict, version: int):
@@ -807,6 +823,7 @@ def seed(conn):
             "otherExpense": as_bool(raw.get("otherExpense")),
             "parentContractId": text(raw.get("parentContractId")),
             "fundingContractId": text(raw.get("fundingContractId")),
+            "advancePercent": optional_percent(raw.get("advancePercent")),
         }, 1)
     for raw in payload.get("specifications") or []:
         upsert_spec(conn, {
@@ -1242,9 +1259,9 @@ EXPORT_HEADERS = [
     "Вид договора", "Категория", "Дата начала", "Дата окончания", "Прочие расходы",
     "Статус", "Номер договора", "Дата согласования", "Дата оплаты", "Вид платежа",
     "Подвид", "БДДС", "ЦФО", "Сумма с НДС", "Сумма оплаты", "Вид оплаты",
-    "Договор-основание",
+    "Договор-основание", "Аванс, %",
 ]
-OPTIONAL_HEADERS = {"Договор-основание"}
+OPTIONAL_HEADERS = {"Договор-основание", "Аванс, %"}
 VAT_CHOICES = {Decimal(item) for item in ("0", "5", "7", "10", "20", "22")}
 
 
@@ -1289,6 +1306,16 @@ def import_date(value, line: int, column: str, required: bool) -> str:
         except ValueError:
             continue
     raise RowProblem(line, column, f"дата «{raw}» не разобрана")
+
+
+def import_percent(value, line: int):
+    raw = text(value).strip().replace("%", "").replace(" ", "")
+    if not raw:
+        return None
+    number = parse_money(raw.replace(",", "."))
+    if number is None:
+        raise RowProblem(line, "Аванс, %", "укажите процент числом")
+    return number
 
 
 def import_money(value, line: int, column: str, required: bool) -> Decimal:
@@ -1366,7 +1393,7 @@ CONTRACT_KIND = {"рамочный": "framework", "нерамочный": "fixed
 CATEGORY = {"лимит": "limit", "спецификация": "specification", "заявка": "request", "доп. соглашение": "addendum", "limit": "limit", "specification": "specification", "request": "request", "addendum": "addendum"}
 CONTRACT_STATUS = {"черновик": "draft", "действует": "active", "завершен": "closed", "draft": "draft", "active": "active", "closed": "closed"}
 PAY_TYPE = {"поступление": "income", "оплата": "expense", "платеж": "expense", "списание": "expense", "доходный": "income", "расходный": "expense", "income": "income", "expense": "expense"}
-PAY_STATUS = {"запланирован": "planned", "исполнен": "paid", "отменен": "cancelled", "planned": "planned", "paid": "paid", "cancelled": "cancelled"}
+PAY_STATUS = {"запланирован": "planned", "не исполнен": "planned", "исполнен": "paid", "отменен": "cancelled", "planned": "planned", "paid": "paid", "cancelled": "cancelled"}
 PAY_KIND = {"аванс": "advance", "постоплата": "postpay", "гу": "gu", "advance": "advance", "postpay": "postpay", "gu": "gu"}
 SUBTYPE = {"спецификация": "specification", "заявка": "request", "счет": "invoice", "specification": "specification", "request": "request", "invoice": "invoice"}
 YES_VALUES = {"да", "yes", "true", "1", "on"}
@@ -1416,6 +1443,7 @@ def export_csv(contracts: list, payments: list) -> str:
             display_choice(contract["status"], [("draft", "Черновик"), ("active", "Действует"), ("closed", "Завершен")]),
             "", "", "", "", "", "", "", "", "", "",
             number_of(contract.get("parentContractId")),
+            csv_amount(contract.get("advancePercent")),
         ])
     for payment in payments:
         parent = by_id.get(payment["contractId"]) or {}
@@ -1431,7 +1459,7 @@ def export_csv(contracts: list, payments: list) -> str:
             display_choice(payment["subtype"], [("specification", "Спецификация"), ("request", "Заявка"), ("invoice", "Счёт")]),
             payment["bdds"], payment["cfo"], csv_amount(payment["approvalAmount"]), csv_amount(payment["amount"]),
             display_choice(payment["paymentKind"], [("advance", "Аванс"), ("postpay", "Постоплата"), ("gu", "ГУ"), ("stage", "ГУ")]),
-            "",
+            "", "",
         ])
     return "\ufeff" + buffer.getvalue()
 
@@ -1517,6 +1545,7 @@ def contract_from_import(record: dict, line: int, contracts_by_number: dict | No
         "otherExpense": direction == "expense" and fold(other_raw) in YES_VALUES,
         "parentContractId": parent["id"] if parent else "",
         "fundingContractId": funding_id,
+        "advancePercent": import_percent(record.get("Аванс, %", ""), line),
         "version": 1,
     }
 
@@ -1534,7 +1563,7 @@ def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> d
     responsible = record["Ответственный"].strip()
     comment = record["Комментарий"].strip()
     import_registry_fields(number, card, responsible, comment, line)
-    amount = import_money(record["Сумма оплаты"], line, "Сумма оплаты", True)
+    amount = import_money(record["Сумма оплаты"], line, "Сумма оплаты", False)
     approval = import_money(record["Сумма с НДС"], line, "Сумма с НДС", False)
     if text(record["Сумма с НДС"]).strip() == "":
         approval = amount
@@ -1553,7 +1582,7 @@ def payment_from_import(record: dict, line: int, contracts_by_number: dict) -> d
         "amount": amount,
         "type": mapped(record["Вид платежа"], PAY_TYPE, line, "Вид платежа", "expense"),
         "paymentKind": mapped(record["Вид оплаты"], PAY_KIND, line, "Вид оплаты", "postpay"),
-        "status": mapped(record["Статус"], PAY_STATUS, line, "Статус", "paid"),
+        "status": mapped(record["Статус"], PAY_STATUS, line, "Статус", "paid" if payment_date else "planned"),
         "comment": comment,
         "approvalDate": approval_date,
         "paymentDate": payment_date,
@@ -1590,6 +1619,459 @@ def index_contracts(contracts: list) -> dict:
     return found
 
 
+EXCEL_PAGES = ("contracts", "payments", "analytics", "dictionaries", "history")
+THIN_BORDER = Border(
+    left=Side(style="thin", color="E6EAF0"),
+    right=Side(style="thin", color="E6EAF0"),
+    top=Side(style="thin", color="E6EAF0"),
+    bottom=Side(style="thin", color="E6EAF0"),
+)
+FILL_HEADER = PatternFill("solid", fgColor="62B3AC")
+FILL_GROUP = PatternFill("solid", fgColor="E5F6F4")
+FILL_TOTAL = PatternFill("solid", fgColor="E7F5F3")
+FONT_HEADER = Font(bold=True, color="103E3B", name="Calibri", size=11)
+FONT_GROUP = Font(bold=True, color="20293A", name="Calibri")
+FONT_NEG = Font(color="DF5555", name="Calibri")
+FONT_NEG_BOLD = Font(bold=True, color="DF5555", name="Calibri")
+MONEY_FORMAT = "#,##0.00"
+DATE_FORMAT = "DD.MM.YYYY"
+KIND_LABELS = [("framework", "Рамочный"), ("fixed", "Нерамочный")]
+DIRECTION_LABELS = [("income", "Доходный"), ("expense", "Расходный")]
+CATEGORY_LABELS = [("limit", "Лимит"), ("specification", "Спецификация"), ("request", "Заявка"), ("addendum", "Доп. соглашение")]
+PAY_STATUS_LABELS = [("planned", "Запланирован"), ("paid", "Исполнен"), ("cancelled", "Отменен")]
+PAY_TYPE_LABELS = [("income", "Поступление"), ("expense", "Списание")]
+PAY_KIND_LABELS = [("advance", "Аванс"), ("postpay", "Постоплата"), ("gu", "ГУ"), ("stage", "ГУ")]
+SUBTYPE_LABELS = [("specification", "Спецификация"), ("request", "Заявка"), ("invoice", "Счёт")]
+AUDIT_SECTION = {"contract": "Договоры", "payment": "Платежи", "specification": "Спецификации", "dictionary": "Справочники"}
+
+
+def excel_date(value):
+    raw = text(value).strip()[:10]
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return raw
+
+
+def excel_money(value):
+    if value in (None, ""):
+        return None
+    return Decimal(str(value)).quantize(MONEY)
+
+
+def excel_dec(value) -> Decimal:
+    return Decimal(str(value or 0))
+
+
+def write_excel_row(ws, values, kinds, bold=False, fill=None):
+    ws.append(list(values))
+    row_index = ws.max_row
+    for col, kind in enumerate(kinds, 1):
+        cell = ws.cell(row_index, col)
+        cell.border = THIN_BORDER
+        cell.alignment = Alignment(vertical="center", horizontal="right" if kind == "m" else "left", wrap_text=False)
+        if fill:
+            cell.fill = fill
+        value = cell.value
+        negative = kind == "m" and isinstance(value, Decimal) and value < 0
+        if kind == "m" and isinstance(value, Decimal):
+            cell.number_format = MONEY_FORMAT
+        elif kind == "d" and hasattr(value, "year"):
+            cell.number_format = DATE_FORMAT
+        if negative:
+            cell.font = FONT_NEG_BOLD if bold else FONT_NEG
+        elif bold:
+            cell.font = FONT_GROUP
+    return row_index
+
+
+def finish_excel_sheet(ws, widths):
+    ws.sheet_properties.outlinePr.summaryBelow = False
+    ws.sheet_properties.tabColor = "62B3AC"
+    ws.freeze_panes = "A2"
+    last_col = get_column_letter(max(ws.max_column, 1))
+    ws.auto_filter.ref = f"A1:{last_col}{max(ws.max_row, 1)}"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.row_dimensions[1].height = 32
+    for cell in ws[1]:
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = THIN_BORDER
+    for index, width in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(index)].width = width
+
+
+def group_excel_rows(ws, start, end, level=1):
+    if end >= start:
+        ws.row_dimensions.group(start, end, hidden=False, outline_level=level)
+
+
+def rows_by_parent(contracts):
+    ids = {item["id"] for item in contracts}
+    children = {}
+    for item in contracts:
+        parent = item.get("parentContractId") or ""
+        if parent in ids:
+            children.setdefault(parent, []).append(item)
+    for items in children.values():
+        items.sort(key=lambda item: text(item.get("number")))
+    tops = [item for item in contracts if (item.get("parentContractId") or "") not in ids]
+    tops.sort(key=lambda item: text(item.get("number")))
+    return ids, children, tops
+
+
+def contract_excel_values(contract, by_id):
+    parent = by_id.get(contract.get("parentContractId") or "")
+    amount = excel_money(contract.get("amount"))
+    net = excel_money(contract.get("amountWithoutVat"))
+    vat = (amount - net).quantize(MONEY) if amount is not None and net is not None else None
+    number = text(contract.get("number"))
+    if parent:
+        number = "    " + number
+    funding = by_id.get(contract.get("fundingContractId") or "")
+    return [
+        number,
+        contract.get("documentCard") or "",
+        excel_date(contract.get("reviewDate") or contract.get("date")),
+        excel_date(contract.get("registrationDate") or contract.get("date")),
+        contract.get("counterparty") or "",
+        display_choice(contract.get("direction") or "", DIRECTION_LABELS),
+        contract.get("subject") or "",
+        amount,
+        excel_money(contract.get("vatRate")),
+        net,
+        vat,
+        text(funding.get("number")) if funding else (contract.get("fundingSource") or ""),
+        contract.get("project") or "",
+        contract.get("responsible") or "",
+        display_choice(contract.get("documentKind") or "", CONTRACT_DOC_LABELS),
+        display_choice(contract.get("kind") or "", KIND_LABELS),
+        display_choice(contract.get("category") or "", CATEGORY_LABELS),
+        f"№ {parent['number']}" if parent else "",
+        "да" if contract.get("otherExpense") else "",
+        excel_money(contract.get("limitRemainder")) if contract.get("kind") == "framework" else None,
+        excel_money(contract.get("payRemainder")),
+        excel_money(contract.get("advancePercent")),
+        contract.get("comment") or "",
+    ]
+
+
+def sheet_contracts(wb, contracts):
+    ws = wb.active
+    ws.title = "Договоры"
+    headers = [
+        "Номер договора", "Карта документа", "Дата рассмотрения", "Дата регистрации", "Контрагент", "Вид", "Предмет",
+        "Сумма с НДС", "Ставка НДС", "Без НДС", "НДС", "Источник финансирования", "Проект", "Ответственный",
+        "Вид документа", "Подвид", "Категория", "Договор-основание", "Прочие расходы", "Остаток лимита", "Остаток оплат", "% авансирования по условиям договора", "Комментарий",
+    ]
+    kinds = "ttddtttmmmmttttttttmmmt"
+    ws.append(headers)
+    by_id = {item["id"]: item for item in contracts}
+    _, children, tops = rows_by_parent(contracts)
+    for parent in tops:
+        write_excel_row(ws, contract_excel_values(parent, by_id), kinds, bold=True, fill=FILL_GROUP if children.get(parent["id"]) else None)
+        kids = children.get(parent["id"]) or []
+        if not kids:
+            continue
+        start = ws.max_row + 1
+        for child in kids:
+            write_excel_row(ws, contract_excel_values(child, by_id), kinds)
+        group_excel_rows(ws, start, ws.max_row, 1)
+    finish_excel_sheet(ws, [18, 18, 18, 18, 32, 14, 36, 16, 12, 16, 14, 24, 22, 18, 22, 14, 16, 20, 14, 16, 16, 22, 36])
+
+
+def payment_contract_label(payment, by_id):
+    parent = by_id.get(payment.get("contractId") or "")
+    if not parent:
+        return "Без договора"
+    root = by_id.get(parent.get("parentContractId") or "")
+    if root:
+        return f"№ {root['number']} / {parent.get('number')} · {parent.get('counterparty') or ''}".strip()
+    return f"№ {parent.get('number')} · {parent.get('counterparty') or ''}".strip()
+
+
+def payment_excel_values(payment, by_id):
+    parent = by_id.get(payment.get("contractId") or "") or {}
+    gross = excel_money(payment.get("approvalAmount") if payment.get("approvalAmount") not in (None, "") else payment.get("amount"))
+    rate = excel_money(payment.get("approvalVatRate"))
+    net = excel_money(payment.get("approvalAmountWithoutVat"))
+    if net is None and gross is not None and rate is not None:
+        net = without_vat(gross, rate)
+    vat = excel_money(payment.get("approvalVatAmount"))
+    if vat is None and gross is not None and net is not None:
+        vat = (gross - net).quantize(MONEY)
+    funding_id = payment.get("fundingContractId") or parent.get("fundingContractId") or ""
+    funding = by_id.get(funding_id)
+    return [
+        payment.get("documentCard") or "",
+        payment.get("number") or "",
+        excel_date(payment.get("approvalDate")),
+        excel_date(payment.get("paymentDate")),
+        payment_contract_label(payment, by_id) if parent else "",
+        payment.get("counterparty") or parent.get("counterparty") or "",
+        text(funding.get("number")) if funding else "",
+        gross,
+        rate,
+        vat,
+        net,
+        excel_money(payment.get("amount")),
+        display_choice(payment.get("documentKind") or "", PAYMENT_DOC_LABELS),
+        display_choice(payment.get("type") or "", PAY_TYPE_LABELS),
+        display_choice(payment.get("subtype") or "", SUBTYPE_LABELS),
+        payment.get("bdds") or "",
+        payment.get("cfo") or "",
+        display_choice(payment.get("paymentKind") or "", PAY_KIND_LABELS),
+        payment.get("responsible") or "",
+        payment.get("comment") or "",
+        display_choice(payment.get("status") or "", PAY_STATUS_LABELS),
+    ]
+
+
+def sheet_payments(wb, contracts, payments):
+    ws = wb.active
+    ws.title = "Платежи"
+    headers = [
+        "Карта документа", "Номер документа", "Дата согласования", "Дата оплаты", "Договор", "Контрагент",
+        "Источник финансирования", "Сумма с НДС", "Ставка НДС", "НДС", "Без НДС", "Сумма оплаты",
+        "Вид", "Вид платежа", "Подвид", "БДДС", "ЦФО", "Вид оплаты", "Ответственный", "Комментарий", "Статус",
+    ]
+    kinds = "ttddtttmmmmmmtttttttt"
+    ws.append(headers)
+    by_id = {item["id"]: item for item in contracts}
+    grouped = {}
+    for payment in payments:
+        grouped.setdefault(payment.get("contractId") or "", []).append(payment)
+    def sort_key(contract_id):
+        contract = by_id.get(contract_id)
+        return (contract is None, text(contract.get("number")) if contract else "")
+    for contract_id in sorted(grouped, key=sort_key):
+        items = sorted(grouped[contract_id], key=lambda item: text(item.get("approvalDate")), reverse=True)
+        total = sum((excel_dec(item.get("amount")) for item in items), Decimal(0)).quantize(MONEY)
+        title = payment_contract_label(items[0], by_id)
+        summary = [title] + [None] * 10 + [total] + [None] * 9
+        write_excel_row(ws, summary, kinds, bold=True, fill=FILL_GROUP)
+        start = ws.max_row + 1
+        for payment in items:
+            write_excel_row(ws, payment_excel_values(payment, by_id), kinds)
+        group_excel_rows(ws, start, ws.max_row, 1)
+    finish_excel_sheet(ws, [18, 18, 18, 16, 28, 32, 24, 16, 12, 14, 16, 16, 24, 16, 16, 22, 22, 14, 18, 32, 16])
+
+
+def excel_share(part, whole):
+    base = Decimal(str(whole or 0))
+    if base == 0 or part is None:
+        return None
+    return (Decimal(str(part)) / base * Decimal(100)).quantize(Decimal("0.01"))
+
+
+def analytics_values(title, kind, counterparty, direction, project, limit, fact, contracted=None, balance=None, term_percent=None, fact_percent=None):
+    rest = (limit - fact).quantize(MONEY) if limit is not None and fact is not None else None
+    return [title, kind, counterparty, direction, project, limit, fact, rest, contracted, balance, term_percent, fact_percent]
+
+
+def sheet_analytics(wb, contracts, payments):
+    ws = wb.active
+    ws.title = "Аналитика"
+    headers = ["Договор", "Рамочный / нерамочный", "Контрагент", "Тип", "Проект", "Лимит", "Факт (оплаты)", "Остаток оплат", "Законтрактовано расходов", "Остаток (доход − расход)", "% по условию договора", "% Факт"]
+    kinds = "tttttmmmmmmm"
+    ws.append(headers)
+    ids, children, _tops = rows_by_parent(contracts)
+    by_id = {item["id"]: item for item in contracts}
+
+    def is_top(contract):
+        return (contract.get("parentContractId") or "") not in ids
+
+    income = [item for item in contracts if is_top(item) and item.get("direction") == "income" and not item.get("otherExpense")]
+    income.sort(key=lambda item: text(item.get("number")))
+    expense = [item for item in contracts if is_top(item) and item.get("direction") != "income" and not item.get("otherExpense")]
+    level1 = []
+    level2 = []
+
+    def remember(bucket, start):
+        if ws.max_row >= start:
+            bucket.append((start, ws.max_row))
+
+    def write_contract(contract, contracted=None, balance=None, bold=False, fill=None):
+        limit = excel_money(contract.get("amount"))
+        fact = excel_money(contract.get("paidTotal"))
+        title = f"№ {contract.get('number')} · {contract.get('subject') or ''}".strip()
+        write_excel_row(ws, analytics_values(
+            title,
+            display_choice(contract.get("kind") or "", KIND_LABELS),
+            contract.get("counterparty") or "",
+            display_choice(contract.get("direction") or "", DIRECTION_LABELS),
+            contract.get("project") or "",
+            limit,
+            fact,
+            excel_money(contracted) if contracted is not None else None,
+            excel_money(balance) if balance is not None else None,
+            excel_money(contract.get("advancePercent")),
+            excel_share(fact, limit),
+        ), kinds, bold=bold, fill=fill)
+
+    def write_specs(parent, bucket):
+        kids = children.get(parent["id"]) or []
+        if not kids:
+            return
+        start = ws.max_row + 1
+        for child in kids:
+            cat = display_choice(child.get("category") or "", CATEGORY_LABELS) or "Спецификация"
+            saved_number = child.get("number")
+            child = {**child, "number": f"{cat} {saved_number}"}
+            write_contract(child)
+            ws.cell(ws.max_row, 1).value = f"{cat} {saved_number} · {child.get('subject') or ''}"
+        if bucket is not None:
+            remember(bucket, start)
+
+    def write_free(items, bucket):
+        if not items:
+            return
+        total = sum((excel_dec(item.get("amount")) for item in items), Decimal(0)).quantize(MONEY)
+        fact = sum((excel_dec(item.get("amount")) for item in items if item.get("status") == "paid"), Decimal(0)).quantize(MONEY)
+        write_excel_row(ws, analytics_values(f"Счета без договора ({len(items)})", "", "", "Счета", "", total, fact, fact_percent=excel_share(fact, total)), kinds, bold=True)
+        start = ws.max_row + 1
+        for payment in items:
+            paid = excel_money(payment.get("amount")) if payment.get("status") == "paid" else Decimal("0.00")
+            amount = excel_money(payment.get("amount"))
+            write_excel_row(ws, analytics_values(
+                f"{payment.get('number') or ''} · {payment.get('paymentDate') or payment.get('approvalDate') or ''}",
+                "",
+                payment.get("counterparty") or "",
+                display_choice(payment.get("documentKind") or "", PAYMENT_DOC_LABELS),
+                payment.get("project") or "",
+                amount,
+                paid,
+                fact_percent=excel_share(paid, amount),
+            ), kinds)
+        remember(bucket, start)
+
+    income_limit = Decimal(0)
+    income_fact = Decimal(0)
+    expense_limit = Decimal(0)
+    expense_fact = Decimal(0)
+    for inc in income:
+        funded = [item for item in expense if item.get("fundingContractId") == inc["id"] and by_id.get(item.get("fundingContractId"))]
+        funded.sort(key=lambda item: text(item.get("number")))
+        free = [item for item in payments if not item.get("contractId") and (item.get("fundingContractId") or "") == inc["id"]]
+        contracted = sum((excel_dec(item.get("amount")) for item in funded), Decimal(0)) + sum((excel_dec(item.get("amount")) for item in free), Decimal(0))
+        limit = excel_dec(inc.get("amount"))
+        fact = excel_dec(inc.get("paidTotal"))
+        income_limit += limit
+        income_fact += fact
+        expense_limit += contracted
+        expense_fact += sum((excel_dec(item.get("paidTotal")) for item in funded), Decimal(0)) + sum((excel_dec(item.get("amount")) for item in free if item.get("status") == "paid"), Decimal(0))
+        write_contract(inc, contracted, limit - contracted, bold=True, fill=FILL_GROUP)
+        start = ws.max_row + 1
+        write_specs(inc, None)
+        for item in funded:
+            write_contract(item, bold=True)
+            write_specs(item, level2)
+        write_free(free, level2)
+        remember(level1, start)
+    orphans = [item for item in expense if not item.get("fundingContractId") or not by_id.get(item.get("fundingContractId"))]
+    orphan_free = [item for item in payments if not item.get("contractId") and (not item.get("fundingContractId") or not by_id.get(item.get("fundingContractId")))]
+    if orphans or orphan_free:
+        total = sum((excel_dec(item.get("amount")) for item in orphans), Decimal(0)) + sum((excel_dec(item.get("amount")) for item in orphan_free), Decimal(0))
+        fact = sum((excel_dec(item.get("paidTotal")) for item in orphans), Decimal(0)) + sum((excel_dec(item.get("amount")) for item in orphan_free if item.get("status") == "paid"), Decimal(0))
+        expense_limit += total
+        expense_fact += fact
+        write_excel_row(ws, analytics_values("Без источника финансирования", "", "", "", "", total.quantize(MONEY), fact.quantize(MONEY), fact_percent=excel_share(fact, total)), kinds, bold=True, fill=FILL_GROUP)
+        start = ws.max_row + 1
+        for item in orphans:
+            write_contract(item, bold=True)
+            write_specs(item, level2)
+        write_free(orphan_free, level2)
+        remember(level1, start)
+    for start, end in level1:
+        group_excel_rows(ws, start, end, 1)
+    for start, end in level2:
+        group_excel_rows(ws, start, end, 2)
+    write_excel_row(ws, analytics_values("Итого доходы", "", "", "", "", income_limit.quantize(MONEY), income_fact.quantize(MONEY), fact_percent=excel_share(income_fact, income_limit)), kinds, bold=True, fill=FILL_TOTAL)
+    write_excel_row(ws, analytics_values("Итого расходы", "", "", "", "", expense_limit.quantize(MONEY), expense_fact.quantize(MONEY), fact_percent=excel_share(expense_fact, expense_limit)), kinds, bold=True, fill=FILL_TOTAL)
+    write_excel_row(ws, analytics_values("Остаток (доход − расход)", "", "", "", "", (income_limit - expense_limit).quantize(MONEY), (income_fact - expense_fact).quantize(MONEY)), kinds, bold=True, fill=FILL_TOTAL)
+    others = [item for item in contracts if is_top(item) and item.get("otherExpense")]
+    if others:
+        ws.append([None] * len(headers))
+        write_excel_row(ws, ["Прочие расходы"] + [None] * (len(headers) - 1), kinds, bold=True, fill=FILL_TOTAL)
+        for item in others:
+            write_contract(item, bold=True, fill=FILL_GROUP)
+            start = ws.max_row + 1
+            write_specs(item, [])
+            group_excel_rows(ws, start, ws.max_row, 1)
+    finish_excel_sheet(ws, [42, 18, 28, 16, 22, 18, 18, 18, 24, 26, 18, 12])
+
+
+def sheet_dictionaries(wb, dictionaries):
+    ws = wb.active
+    ws.title = "Справочники"
+    kinds = "tt"
+    ws.append(["Справочник", "Значение"])
+    for kind in DICTIONARY_KINDS:
+        items = [item for item in dictionaries if item.get("kind") == kind]
+        items.sort(key=lambda item: text(item.get("value")).lower())
+        write_excel_row(ws, [DICTIONARY_LABELS[kind], f"{len(items)}"], kinds, bold=True, fill=FILL_GROUP)
+        if not items:
+            continue
+        start = ws.max_row + 1
+        for item in items:
+            write_excel_row(ws, [DICTIONARY_LABELS[kind], item.get("value") or ""], kinds)
+        group_excel_rows(ws, start, ws.max_row, 1)
+    finish_excel_sheet(ws, [24, 48])
+
+
+def sheet_history(wb, history):
+    ws = wb.active
+    ws.title = "История"
+    kinds = "dttttt"
+    ws.append(["Дата", "Время", "Раздел", "Изменение", "Описание", "Пользователь"])
+    grouped = {}
+    for item in history:
+        moment = item["ts"]
+        grouped.setdefault(moment.date(), []).append(item)
+    for day in sorted(grouped, reverse=True):
+        items = grouped[day]
+        write_excel_row(ws, [day, "", "", f"{len(items)}", "", ""], kinds, bold=True, fill=FILL_GROUP)
+        start = ws.max_row + 1
+        for item in items:
+            moment = item["ts"]
+            write_excel_row(ws, [
+                moment.date(),
+                moment.strftime("%H:%M:%S"),
+                AUDIT_SECTION.get(item["entity_type"], "Система"),
+                item["action"] or "",
+                item["label"] or "",
+                item["actor"] or "",
+            ], kinds)
+        group_excel_rows(ws, start, ws.max_row, 1)
+    finish_excel_sheet(ws, [16, 14, 18, 32, 48, 20])
+
+
+def build_excel(page: str, contracts, payments, dictionaries, history) -> bytes:
+    wb = Workbook()
+    if page == "contracts":
+        sheet_contracts(wb, contracts)
+    elif page == "payments":
+        sheet_payments(wb, contracts, payments)
+    elif page == "analytics":
+        sheet_analytics(wb, contracts, payments)
+    elif page == "dictionaries":
+        sheet_dictionaries(wb, dictionaries)
+    elif page == "history":
+        sheet_history(wb, history)
+    else:
+        raise HTTPException(400, "Неизвестная страница")
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 @app.get("/api/export")
 def export_registry(request: Request):
     guard(request, ALL_GROUPS)
@@ -1597,6 +2079,32 @@ def export_registry(request: Request):
         contracts, _, payments = fetch_all(conn)
     content = export_csv(contracts, payments).encode("utf-8")
     return Response(content, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=registry.csv"})
+
+
+@app.get("/api/export.xlsx")
+def export_excel(request: Request, page: str = Query("contracts")):
+    if page not in EXCEL_PAGES:
+        raise HTTPException(400, "Неизвестная страница")
+    guard(request, AUDIT_GROUPS if page == "history" else ALL_GROUPS)
+    with transaction() as conn:
+        contracts, _, payments = fetch_all(conn)
+        dictionaries = [dictionary_from_row(row) for row in conn.execute("SELECT * FROM dictionaries ORDER BY kind, lower(value)")]
+        history = []
+        if page == "history":
+            history = conn.execute("SELECT ts, actor, action, entity_type, label FROM audit_log ORDER BY id DESC").fetchall()
+    content = build_excel(page, contracts, payments, dictionaries, history)
+    filenames = {
+        "contracts": "contracts.xlsx",
+        "payments": "payments.xlsx",
+        "analytics": "analytics.xlsx",
+        "dictionaries": "dictionaries.xlsx",
+        "history": "history.xlsx",
+    }
+    return Response(
+        content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filenames[page]}"'},
+    )
 
 
 @app.post("/api/import")
