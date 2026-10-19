@@ -465,7 +465,7 @@
     ],
     payment: [
       {id:'documentCard', label:'Карта документа'},
-      {id:'number', label:'Номер документа'},
+      {id:'number', label:'№'},
       {id:'contractNumber', label:'Номер договора'},
       {id:'approvalDate', label:'Дата согласования', type:'date'},
       {id:'paymentDate', label:'Дата оплаты', type:'date'},
@@ -1108,8 +1108,7 @@
   /* ---------- платежи ---------- */
   const PAYMENT_COLS = [
     {label:'Карта документа', w:110},
-    {label:'№', w:90},
-    {label:'Номер документа', w:110},
+    {label:'№', w:110},
     {label:'Начало согл.', w:110, sort:'approvalDate'},
     {label:'Заверш. согл.', w:110, sort:'approvalEndDate'},
     {label:'Дата 1С', w:100, sort:'postedDate'},
@@ -1161,7 +1160,6 @@
         const funding = fundingLabel(p.fundingContractId || c?.fundingContractId);
         return `<tr data-id="${esc(p.id)}">
           <td data-field="documentCard">${cellText(p.documentCard)}</td>
-          <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
           <td data-field="approvalEndDate">${showDate(p.approvalEndDate)}</td>
@@ -1254,7 +1252,6 @@
     return `<tr class="edit-row" id="payment-edit-row">
       <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(p.number)}" placeholder="П-001" autocomplete="off"></td>
-      <td class="cell-center">${esc(p.number || '—')}</td>
       <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}" title="Начало согласования"></td>
       <td><input name="approvalEndDate" type="date" value="${esc(p.approvalEndDate || '')}" title="Завершение согласования"></td>
       <td><input name="postedDate" type="date" value="${esc(p.postedDate || '')}" title="Дата 1С"></td>
