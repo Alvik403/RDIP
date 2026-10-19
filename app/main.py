@@ -564,11 +564,11 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
         "approvalVatAmount": (approval - net).quantize(MONEY, rounding=ROUND_HALF_UP),
         "documentKind": document_kind,
         "subtype": subtype,
-        "approvalEndDate": text(payload.get("approvalEndDate") or approval_date),
-        "postedDate": text(payload.get("postedDate") or payment_date),
-        "costType": text(payload.get("costType") or payload.get("bdds")),
-        "mvz": text(payload.get("mvz") or payload.get("cfo")),
-        "keyCounterparty": text(payload.get("keyCounterparty")),
+        "approvalEndDate": text(payload.get("approvalEndDate")).strip() if "approvalEndDate" in payload else text((existing or {}).get("approvalEndDate") or ""),
+        "postedDate": text(payload.get("postedDate")).strip() if "postedDate" in payload else text((existing or {}).get("postedDate") or ""),
+        "costType": text(payload.get("costType")) if "costType" in payload else text((existing or {}).get("costType") or payload.get("bdds")),
+        "mvz": text(payload.get("mvz")) if "mvz" in payload else text((existing or {}).get("mvz") or payload.get("cfo")),
+        "keyCounterparty": text(payload.get("keyCounterparty")) if "keyCounterparty" in payload else text((existing or {}).get("keyCounterparty") or payload.get("counterparty")),
         "project": text(payload.get("project")),
         "counterparty": text(payload.get("counterparty")).strip(),
         "fundingContractId": text(payload.get("fundingContractId")).strip(),
@@ -1830,6 +1830,11 @@ def payment_excel_values(payment, by_id):
         display_choice(payment.get("paymentKind") or "", PAY_KIND_LABELS),
         payment.get("responsible") or "",
         payment.get("comment") or "",
+        excel_date(payment.get("approvalEndDate")),
+        excel_date(payment.get("postedDate")),
+        payment.get("costType") or "",
+        payment.get("mvz") or "",
+        payment.get("keyCounterparty") or "",
         display_choice(payment.get("status") or "", PAY_STATUS_LABELS),
     ]
 
@@ -1840,9 +1845,10 @@ def sheet_payments(wb, contracts, payments):
     headers = [
         "Карта документа", "Номер документа", "Дата согласования", "Дата оплаты", "Договор", "Контрагент",
         "Источник финансирования", "Сумма с НДС", "Ставка НДС", "НДС", "Без НДС", "Сумма оплаты",
-        "Вид", "Вид платежа", "Подвид", "БДДС", "ЦФО", "Вид оплаты", "Ответственный", "Комментарий", "Статус",
+        "Вид", "Вид платежа", "Подвид", "БДДС", "ЦФО", "Вид оплаты", "Ответственный", "Комментарий",
+        "Заверш. согл.", "Дата 1С", "Вид затрат", "МВЗ", "Ключевой контрагент", "Статус",
     ]
-    kinds = "ttddtttmmmmmmtttttttt"
+    kinds = "ttddtttmmmmmttttttttddtttt"
     ws.append(headers)
     by_id = {item["id"]: item for item in contracts}
     grouped = {}
@@ -1855,13 +1861,13 @@ def sheet_payments(wb, contracts, payments):
         items = sorted(grouped[contract_id], key=lambda item: text(item.get("approvalDate")), reverse=True)
         total = sum((excel_dec(item.get("amount")) for item in items), Decimal(0)).quantize(MONEY)
         title = payment_contract_label(items[0], by_id)
-        summary = [title] + [None] * 10 + [total] + [None] * 9
+        summary = [title] + [None] * 10 + [total] + [None] * 14
         write_excel_row(ws, summary, kinds, bold=True, fill=FILL_GROUP)
         start = ws.max_row + 1
         for payment in items:
             write_excel_row(ws, payment_excel_values(payment, by_id), kinds)
         group_excel_rows(ws, start, ws.max_row, 1)
-    finish_excel_sheet(ws, [18, 18, 18, 16, 28, 32, 24, 16, 12, 14, 16, 16, 24, 16, 16, 22, 22, 14, 18, 32, 16])
+    finish_excel_sheet(ws, [18, 18, 18, 16, 28, 32, 24, 16, 12, 14, 16, 16, 24, 16, 16, 22, 22, 14, 18, 32, 16, 16, 18, 16, 28, 16])
 
 
 def excel_share(part, whole):

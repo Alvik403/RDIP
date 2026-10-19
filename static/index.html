@@ -253,9 +253,13 @@
       border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 10px; margin-bottom: 16px;
       color: var(--ink); background: var(--surface); box-shadow: var(--shadow);
     }
-    .dash-head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-bottom: 14px; }
-    .dash-head h3 { margin: 0; font-size: 15px; color: var(--ink); }
-    .dash-head span { font-size: 12px; color: var(--muted); }
+    .dash.collapsed { padding-bottom: 16px; }
+    .dash-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .dash.collapsed .dash-head { margin-bottom: 0; }
+    .dash-head h3 { flex: 1; min-width: 180px; margin: 0; font-size: 15px; color: var(--ink); }
+    .dash-head span { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
+    .dash-head .btn { flex: none; }
+    .dash-body { max-height: 320px; overflow: auto; padding-right: 4px; }
     .dash-row { display: grid; grid-template-columns: minmax(160px, 280px) minmax(0, 1fr) 150px; gap: 14px; align-items: center; margin: 8px 0; }
     .dash-label { text-align: right; font-size: 13px; font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dash-label small { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 500; }
@@ -429,8 +433,10 @@
   const expandedContracts = new Set();
   const expandedAnalytics = new Set();
   let analyticsAllOpen = false;
+  let dashOpen = false;
   const activeFilters = { contract: [], payment: [], analytics: [] };
   let paymentSort = { field: 'approvalDate', dir: -1 };
+  let contractSort = { field: 'reviewDate', dir: -1 };
   const VAT_RATES = [0, 5, 7, 10, 20, 22];
   const DEFAULT_VAT = 22;
   const DICT_KINDS = [['cfo', 'ЦФО'], ['bdds', 'Статьи БДДС'], ['project', 'Проекты']];
@@ -640,6 +646,8 @@
     if (id === 'contractNumber') return contractById(p.contractId)?.number || '';
     if (id === 'fundingSource') return fundingLabel(p.fundingContractId || contractById(p.contractId)?.fundingContractId);
     if (id === 'approvalDate') return p.approvalDate || p.date || '';
+    if (id === 'approvalEndDate') return p.approvalEndDate || '';
+    if (id === 'postedDate') return p.postedDate || '';
     if (id === 'paymentDate') return p.paymentDate || p.date || '';
     if (id === 'paymentKind') return p.paymentKind === 'stage' ? 'gu' : (p.paymentKind || '');
     return p[id] || '';
@@ -857,7 +865,7 @@
     const own = paymentsForContract(c.id);
     const width = Math.max(640, (document.getElementById('contracts-table').clientWidth || 1200) - 8);
     const box = `<div class="payment-detail" style="width:${width}px">`;
-    const shown = kids.filter(s => !(editing?.type === 'contract' && !editing.isNew && editing.id === s.id));
+    const shown = kids.filter(s => !(editing?.type === 'contract' && !editing.isNew && editing.id === s.id)).sort(compareContracts);
     if (!shown.length) return `${box}${paymentsByDay(own)}</div>`;
     const actions = s => canEdit() ? `<span class="spec-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${s.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${s.id}')">⌫</button></span>` : '';
     return `${box}${shown.map(s => {
@@ -871,7 +879,7 @@
     {label:'', w:44, cls:'expand-col'},
     {label:'Номер договора', w:120},
     {label:'Карта документа', w:110},
-    {label:'Рассмотр.', w:100},
+    {label:'Рассмотр.', w:100, sort:'reviewDate'},
     {label:'Регистр.', w:100},
     {label:'Контрагент', w:220},
     {label:'Вид', w:100},
@@ -917,7 +925,17 @@
     const openParents = new Set();
     if (activeFilters.contract.length) matched.forEach(c => { if (c.parentContractId) openParents.add(c.parentContractId); });
     const rows = state.contracts.filter(c => ids.has(c.id) && (!c.parentContractId || !contractById(c.parentContractId)));
+    rows.sort(compareContracts);
     return {rows, openParents};
+  }
+  function setContractSort(field) {
+    if (contractSort.field === field) contractSort.dir = -contractSort.dir;
+    else contractSort = {field, dir: -1};
+    renderContracts();
+  }
+  function compareContracts(a, b) {
+    const key = c => String(contractField(c, contractSort.field) || '');
+    return key(a).localeCompare(key(b)) * contractSort.dir || String(a.number).localeCompare(String(b.number), 'ru');
   }
   function renderContracts() {
     const {rows, openParents} = topContracts();
@@ -961,17 +979,34 @@
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${c.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${c.id}')">⌫</button></div>` : ''}</td>
         </tr>${editingChild ? contractEditRow(editItem) : ''}${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
       }).join('')}`;
+    const contractHead = headRow(CONTRACT_COLS, c => c.sort ? {
+      cls: 'sortable',
+      attrs: `onclick="setContractSort('${c.sort}')" title="Сортировать"`,
+      suffix: contractSort.field === c.sort ? (contractSort.dir < 0 ? ' ▼' : ' ▲') : ''
+    } : {});
     const contractsTable = document.getElementById('contracts-table');
     contractsTable.classList.toggle('can-edit', canEdit());
     contractsTable.innerHTML = body
-      ? `<table class="data-table" style="width:${tableWidth(CONTRACT_COLS)}px">${colgroup(CONTRACT_COLS)}${headRow(CONTRACT_COLS)}<tbody>${body}</tbody></table>`
+      ? `<table class="data-table" style="width:${tableWidth(CONTRACT_COLS)}px">${colgroup(CONTRACT_COLS)}${contractHead}<tbody>${body}</tbody></table>`
       : '<div class="empty">Ничего не найдено</div>';
     applyContractFieldRules();
   }
-  function parentOptions(category, selfId) {
+  function partyKey(value) {
+    return String(value || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
+  }
+  function sameCounterparty(contractName, typed) {
+    const left = partyKey(contractName);
+    const right = partyKey(typed);
+    if (!left || !right) return false;
+    return left === right || (right.length >= 2 && left.includes(right));
+  }
+  function parentOptions(category, selfId, counterparty) {
+    const name = partyKey(counterparty);
+    if (!name) return [];
     return state.contracts
       .filter(c => isTop(c) && c.documentKind === 'contract' && c.id !== selfId)
       .filter(c => category === 'addendum' ? true : c.kind === 'framework')
+      .filter(c => sameCounterparty(c.counterparty, counterparty))
       .map(c => [c.id, `№ ${c.number} · ${c.counterparty}`]);
   }
   function fundingOptions() {
@@ -994,8 +1029,10 @@
       documentKind.value = 'contract';
       documentKind.disabled = true;
       const current = parent.dataset.current || parent.value;
-      const options = parentOptions(category.value, selfId);
-      parent.innerHTML = `<option value="">Выберите договор</option>${optionTags(options, current)}`;
+      const counterparty = row.querySelector('[name=counterparty]')?.value || contractById(current)?.counterparty || '';
+      const options = parentOptions(category.value, selfId, counterparty);
+      const hint = partyKey(counterparty) ? 'Нет договоров этого контрагента' : 'Сначала укажите контрагента';
+      parent.innerHTML = `<option value="">${options.length ? 'Выберите договор' : hint}</option>${optionTags(options, current)}`;
       parent.disabled = false;
       parent.required = true;
       parent.dataset.current = '';
@@ -1046,7 +1083,7 @@
       <td><input name="documentCard" value="${esc(c.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}"></td>
       <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
-      <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент" list="counterparty-list"></td>
+      <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент" list="counterparty-list" oninput="applyContractFieldRules()"></td>
       <td><select name="direction" onchange="applyContractFieldRules()">${optionTags([['income','Доходный'],['expense','Расходный']], c.direction || 'expense')}</select></td>
       <td><input name="subject" required value="${esc(c.subject)}" placeholder="Предмет"></td>
       <td><input name="amount" inputmode="decimal" required value="${c.amount ?? ''}" placeholder="0" autocomplete="off"></td>
@@ -1071,8 +1108,11 @@
   /* ---------- платежи ---------- */
   const PAYMENT_COLS = [
     {label:'Карта документа', w:110},
+    {label:'№', w:90},
     {label:'Номер документа', w:110},
-    {label:'Соглас.', w:100, sort:'approvalDate'},
+    {label:'Начало согл.', w:110, sort:'approvalDate'},
+    {label:'Заверш. согл.', w:110, sort:'approvalEndDate'},
+    {label:'Дата 1С', w:100, sort:'postedDate'},
     {label:'Оплата', w:100, sort:'paymentDate'},
     {label:'Исполнение', w:120},
     {label:'Договор', w:150},
@@ -1083,6 +1123,9 @@
     {label:'Без НДС', w:130, cls:'num'},
     {label:'Сумма оплаты', w:130, cls:'num'},
     {label:'Вид', w:150},
+    {label:'Вид затрат', w:160},
+    {label:'МВЗ', w:140},
+    {label:'Ключевой контрагент', w:200},
     {label:'Вид платежа', w:115},
     {label:'Подвид', w:110},
     {label:'БДДС', w:170},
@@ -1119,7 +1162,10 @@
         return `<tr data-id="${esc(p.id)}">
           <td data-field="documentCard">${cellText(p.documentCard)}</td>
           <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
+          <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
+          <td data-field="approvalEndDate">${showDate(p.approvalEndDate)}</td>
+          <td data-field="postedDate">${showDate(p.postedDate)}</td>
           <td data-field="paymentDate">${showDate(p.paymentDate)}</td>
           <td class="cell-center">${executionBadge(p.status)}</td>
           <td data-field="contractId">${cellText(c ? contractLabel(c) : '')}</td>
@@ -1130,6 +1176,9 @@
           ${moneyCell(wovat)}
           ${moneyCell(p.amount, '', 'amount')}
           <td data-field="documentKind">${cellText(payDocLabel[p.documentKind] || '')}</td>
+          <td data-field="costType">${cellText(p.costType)}</td>
+          <td data-field="mvz">${cellText(p.mvz)}</td>
+          <td data-field="keyCounterparty">${cellText(p.keyCounterparty)}</td>
           <td class="cell-center" data-field="type"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${payTypeLabel[p.type] || '—'}</span></td>
           <td class="cell-center" data-field="subtype">${labels[p.subtype] || '—'}</td>
           <td data-field="bdds">${cellText(p.bdds)}</td>
@@ -1205,7 +1254,10 @@
     return `<tr class="edit-row" id="payment-edit-row">
       <td><input name="documentCard" value="${esc(p.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(p.number)}" placeholder="П-001" autocomplete="off"></td>
-      <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}"></td>
+      <td class="cell-center">${esc(p.number || '—')}</td>
+      <td><input name="approvalDate" type="date" value="${esc(p.approvalDate || p.date)}" title="Начало согласования"></td>
+      <td><input name="approvalEndDate" type="date" value="${esc(p.approvalEndDate || '')}" title="Завершение согласования"></td>
+      <td><input name="postedDate" type="date" value="${esc(p.postedDate || '')}" title="Дата 1С"></td>
       <td><input name="paymentDate" type="date" value="${esc(p.paymentDate || '')}" title="Можно оставить пустой, пока оплата не прошла"></td>
       <td class="cell-center">${executionBadge(p.paymentDate ? (p.status === 'cancelled' ? 'cancelled' : 'paid') : 'planned')}</td>
       <td><select name="contractId" onchange="autofillPayment()"><option value="">Договор</option>${optionTags(paymentContractOptions(), p.contractId || '')}</select></td>
@@ -1216,6 +1268,9 @@
       <td class="cell-number">—</td>
       <td><input name="amount" inputmode="decimal" value="${p.amount ?? ''}" placeholder="Можно пустым" title="Можно оставить пустой, пока оплата не прошла" autocomplete="off"></td>
       <td><select name="documentKind" onchange="applyPaymentFieldRules()">${optionTags(PAYMENT_DOC, p.documentKind || 'contract')}</select></td>
+      <td><input name="costType" value="${esc(p.costType || '')}" placeholder="Вид затрат" autocomplete="off"></td>
+      <td><input name="mvz" value="${esc(p.mvz || '')}" placeholder="МВЗ" autocomplete="off"></td>
+      <td><input name="keyCounterparty" value="${esc(p.keyCounterparty || '')}" placeholder="Ключевой контрагент" list="counterparty-list" autocomplete="off"></td>
       <td><select name="type">${optionTags(PAY_TYPES, p.type || 'expense')}</select></td>
       <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || 'invoice')}</select></td>
       <td>${dictSelect('bdds', 'bdds', p.bdds || '')}</td>
@@ -1321,16 +1376,19 @@
     return html;
   }
   function analyticsMatches(c) { return rowMatches(c, activeFilters.analytics, analyticsField); }
+  function toggleDashboard() { dashOpen = !dashOpen; renderAnalytics(); }
   function renderDashboard(income) {
     const items = income.map(c => ({c, free: Number(c.amount || 0) - contracted(c)})).sort((a, b) => b.free - a.free);
     const max = Math.max(1, ...items.map(i => Math.abs(i.free)));
     const total = items.reduce((s, i) => s + Math.max(0, i.free), 0);
-    document.getElementById('analytics-dash').innerHTML = `<div class="dash-head"><h3>Свободный остаток по доходным договорам — можем законтрактовать</h3><span>лимит доходного договора минус привязанные расходные договоры и счета · всего ${money(total)}</span></div>` +
-      (items.length ? items.map(i => `<div class="dash-row">
+    const rows = items.length ? items.map(i => `<div class="dash-row">
         <div class="dash-label" title="${esc(contractLabel(i.c, true))}">№ ${esc(i.c.number)}<small>${esc(i.c.counterparty)}</small></div>
         <div class="dash-track"><div class="dash-bar ${i.free < 0 ? 'neg' : ''}" style="width:${Math.max(1, Math.abs(i.free) / max * 100)}%"></div></div>
         <div class="dash-value ${i.free < 0 ? 'neg' : ''}">${money(i.free)}</div>
-      </div>`).join('') : '<div class="dash-empty">Нет доходных договоров</div>');
+      </div>`).join('') : `<div class="dash-empty">${activeFilters.analytics.length ? 'Нет договоров по фильтру' : 'Нет доходных договоров'}</div>`;
+    const dash = document.getElementById('analytics-dash');
+    dash.classList.toggle('collapsed', !dashOpen);
+    dash.innerHTML = `<div class="dash-head"><h3>Свободный остаток по доходным договорам — можем законтрактовать</h3><span>лимит доходного договора минус привязанные расходные договоры и счета · всего ${money(total)} · ${items.length}</span><button type="button" class="btn small" onclick="toggleDashboard()">${dashOpen ? 'Скрыть' : 'Показать'}</button></div>${dashOpen ? `<div class="dash-body">${rows}</div>` : ''}`;
   }
   function renderAnalytics() {
     const income = incomeContracts();
@@ -1348,10 +1406,11 @@
       metric('Расходы (факт)', money(expenseFact), 'исполненные списания') +
       metric('Остаток (доход − расход)', money(incomeLimit - expenseLimit), 'по лимитам', incomeLimit - expenseLimit < 0 ? 'warn' : 'good') +
       metric('Можем законтрактовать', money(freeToContract), 'сумма свободных остатков доходных договоров', 'good');
-    renderDashboard(income);
 
     const matchedIds = new Set(state.contracts.filter(analyticsMatches).map(c => c.id));
     const filtering = activeFilters.analytics.length > 0;
+    const visibleIncome = filtering ? income.filter(c => matchedIds.has(c.id) || fundedContracts(c.id).some(item => matchedIds.has(item.id) || childrenOf(item.id).some(k => matchedIds.has(k.id)))) : income;
+    renderDashboard(visibleIncome);
     let rows = '';
     income.forEach(inc => {
       const funded = fundedContracts(inc.id);
@@ -1627,6 +1686,11 @@
       values.approvalVatAmount = Math.round((values.approvalAmount - values.approvalAmountWithoutVat) * 100) / 100;
       values.paymentDate = String(values.paymentDate || '').trim();
       values.approvalDate = String(values.approvalDate || '').trim();
+      values.approvalEndDate = String(values.approvalEndDate || '').trim();
+      values.postedDate = String(values.postedDate || '').trim();
+      values.costType = String(values.costType || '').trim();
+      values.mvz = String(values.mvz || '').trim();
+      values.keyCounterparty = String(values.keyCounterparty || '').trim();
       values.date = values.paymentDate;
       values.specificationId = '';
       const contract = contractById(values.contractId);
@@ -1639,12 +1703,7 @@
             !confirm(`Операция превысит лимит на ${money(otherPaid + values.amount - contract.amount)}. Сохранить?`)) return;
       }
       const entity = {...(existing || {}), ...values, status, id: existing?.id || uid('payment')};
-      entity.postedDate = entity.paymentDate;
-      entity.approvalEndDate = entity.approvalEndDate || entity.approvalDate;
-      entity.costType = entity.bdds;
-      entity.mvz = entity.cfo;
       entity.project = contract?.project || entity.project || '';
-      entity.keyCounterparty = entity.counterparty;
       try { await persistRow('/api/payments', entity, existing, 'Изменения сохранены'); }
       catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
     } finally { rowSaving = false; }
