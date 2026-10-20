@@ -147,6 +147,21 @@ CREATE TABLE IF NOT EXISTS dictionaries (
   value text NOT NULL DEFAULT '',
   version integer NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS addendums (
+  id text PRIMARY KEY,
+  contract_id text NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  number text NOT NULL DEFAULT '',
+  document_card text NOT NULL DEFAULT '',
+  approval_date text NOT NULL DEFAULT '',
+  term_change text NOT NULL DEFAULT '',
+  amount numeric(18,2) NOT NULL DEFAULT 0,
+  vat_rate numeric(5,2) NOT NULL DEFAULT 0,
+  advance_percent numeric(6,2),
+  responsible text NOT NULL DEFAULT '',
+  comment text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  version integer NOT NULL DEFAULT 1
+);
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS parent_contract_id text NOT NULL DEFAULT '';
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS funding_contract_id text NOT NULL DEFAULT '';
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS advance_percent numeric(6,2);
@@ -360,6 +375,25 @@ def spec_from_row(row) -> dict:
     }
 
 
+def addendum_from_row(row) -> dict:
+    created = row.get("created_at")
+    return {
+        "id": row["id"],
+        "contractId": row["contract_id"],
+        "number": row["number"],
+        "documentCard": row["document_card"],
+        "approvalDate": row["approval_date"],
+        "termChange": row["term_change"],
+        "amount": json_money(row["amount"]),
+        "vatRate": json_money(row["vat_rate"]),
+        "advancePercent": None if row.get("advance_percent") is None else json_money(row["advance_percent"]),
+        "responsible": row["responsible"],
+        "comment": row["comment"],
+        "createdAt": created.isoformat() if created else "",
+        "version": row["version"],
+    }
+
+
 def payment_from_row(row) -> dict:
     return {
         "id": row["id"],
@@ -411,6 +445,11 @@ def load_payment(conn, entity_id: str):
     return payment_from_row(row) if row else None
 
 
+def load_addendum(conn, entity_id: str):
+    row = conn.execute("SELECT * FROM addendums WHERE id = %s", (entity_id,)).fetchone()
+    return addendum_from_row(row) if row else None
+
+
 def load_dictionary(conn, entity_id: str):
     row = conn.execute("SELECT * FROM dictionaries WHERE id = %s", (entity_id,)).fetchone()
     return dictionary_from_row(row) if row else None
@@ -419,7 +458,44 @@ def load_dictionary(conn, entity_id: str):
 DICTIONARY_LABELS = {"cfo": "ЦФО", "bdds": "Статья БДДС", "project": "Проект"}
 
 
-def decorate(contracts, specs, payments):
+def latest_addendum(items):
+    """Действующее доп. соглашение — последнее по дате согласования, при равенстве — созданное позже."""
+    if not items:
+        return None
+    return max(items, key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))))
+
+
+def apply_addendums(contracts, addendums):
+    """Подтягивает в договор условия действующего доп. соглашения; исходные значения сохраняются в base*."""
+    by_contract: dict[str, list] = {}
+    for item in addendums:
+        by_contract.setdefault(item["contractId"], []).append(item)
+    for contract in contracts:
+        contract["baseAmount"] = contract["amount"]
+        contract["baseVatRate"] = contract["vatRate"]
+        contract["baseAmountWithoutVat"] = contract["amountWithoutVat"]
+        contract["baseAdvancePercent"] = contract["advancePercent"]
+        items = by_contract.get(contract["id"], [])
+        contract["addendumCount"] = len(items)
+        current = latest_addendum(items)
+        contract["currentAddendumNumber"] = current["number"] if current else ""
+        if not current:
+            continue
+        amount = Decimal(str(current["amount"]))
+        rate = Decimal(str(current["vatRate"]))
+        contract["amount"] = float(amount)
+        contract["vatRate"] = float(rate)
+        contract["amountWithoutVat"] = float(without_vat(amount, rate))
+        # % авансирования берётся из последнего ДС, где он указан; если нигде не указан — из договора
+        ordered = sorted(items, key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))))
+        for item in reversed(ordered):
+            if item.get("advancePercent") is not None:
+                contract["advancePercent"] = item["advancePercent"]
+                break
+
+
+def decorate(contracts, specs, payments, addendums=()):
+    apply_addendums(contracts, list(addendums))
     paid_by_contract: dict[str, Decimal] = {}
     for item in payments:
         if item["status"] == "paid" and item["contractId"]:
@@ -453,7 +529,9 @@ def fetch_all(conn):
     contracts = [contract_from_row(row) for row in conn.execute("SELECT * FROM contracts ORDER BY number")]
     specs = [spec_from_row(row) for row in conn.execute("SELECT * FROM specifications ORDER BY number")]
     payments = [payment_from_row(row) for row in conn.execute("SELECT * FROM payments ORDER BY date DESC")]
-    return decorate(contracts, specs, payments)
+    addendums = [addendum_from_row(row) for row in conn.execute("SELECT * FROM addendums ORDER BY approval_date DESC, created_at DESC")]
+    contracts, specs, payments = decorate(contracts, specs, payments, addendums)
+    return contracts, specs, payments, addendums
 
 
 def normalize_contract(payload: dict, existing: dict | None) -> dict:
@@ -465,10 +543,12 @@ def normalize_contract(payload: dict, existing: dict | None) -> dict:
     start_date = text(payload.get("startDate"))
     end_date = text(payload.get("endDate"))
     parent_id = text(payload.get("parentContractId")).strip()
+    if category == "addendum":
+        raise HTTPException(400, "Доп. соглашения ведутся на отдельном листе «Доп. соглашения»")
     if category == "limit":
         parent_id = ""
     elif not parent_id:
-        raise HTTPException(400, "Для спецификации, заявки или доп. соглашения укажите договор-основание")
+        raise HTTPException(400, "Для спецификации или заявки укажите договор-основание")
     if parent_id:
         document_kind = "contract"
     if document_kind in ("invoice", "none"):
@@ -579,6 +659,33 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
     }
 
 
+def normalize_addendum(payload: dict, existing: dict | None) -> dict:
+    check_registry(payload.get("number"), payload.get("documentCard"), payload.get("responsible"), payload.get("comment"))
+    contract_id = text(payload.get("contractId")).strip()
+    if not contract_id:
+        raise HTTPException(400, "Выберите договор, к которому относится доп. соглашение")
+    number = text(payload.get("number")).strip()
+    if not number:
+        raise HTTPException(400, "Укажите номер доп. соглашения")
+    amount = money(payload.get("amount"))
+    rate = money(payload.get("vatRate"))
+    return {
+        "id": text(payload.get("id") or (existing or {}).get("id") or "addendum-" + secrets.token_hex(8)),
+        "contractId": contract_id,
+        "number": number,
+        "documentCard": text(payload.get("documentCard")).strip(),
+        "approvalDate": text(payload.get("approvalDate")).strip(),
+        "termChange": text(payload.get("termChange")).strip(),
+        "amount": amount,
+        "vatRate": rate,
+        "advancePercent": optional_percent(payload.get("advancePercent")),
+        "responsible": text(payload.get("responsible")),
+        "comment": text(payload.get("comment")),
+        "createdAt": text((existing or {}).get("createdAt") or payload.get("createdAt") or ""),
+        "version": int((existing or {}).get("version") or 1),
+    }
+
+
 def normalize_dictionary(payload: dict, existing: dict | None) -> dict:
     kind = text(payload.get("kind") or (existing or {}).get("kind")).strip()
     if kind not in DICTIONARY_KINDS:
@@ -666,6 +773,31 @@ def upsert_spec(conn, entity: dict, version: int):
         )
 
 
+def upsert_addendum(conn, entity: dict, version: int):
+    parent = conn.execute("SELECT parent_contract_id, document_kind FROM contracts WHERE id = %s", (entity["contractId"],)).fetchone()
+    if parent is None:
+        raise HTTPException(400, "Договор не найден")
+    if parent["parent_contract_id"]:
+        raise HTTPException(400, "Доп. соглашение оформляется к договору, а не к спецификации")
+    values = (
+        entity["contractId"], entity["number"], entity["documentCard"], entity["approvalDate"], entity["termChange"],
+        entity["amount"], entity["vatRate"], entity.get("advancePercent"), entity["responsible"], entity["comment"], version, entity["id"],
+    )
+    updated = conn.execute(
+        """UPDATE addendums SET contract_id=%s, number=%s, document_card=%s, approval_date=%s, term_change=%s,
+           amount=%s, vat_rate=%s, advance_percent=%s, responsible=%s, comment=%s, version=%s WHERE id=%s""",
+        values,
+    )
+    if updated.rowcount == 0:
+        created = entity.get("createdAt") or None
+        conn.execute(
+            """INSERT INTO addendums (id, contract_id, number, document_card, approval_date, term_change, amount, vat_rate,
+                 advance_percent, responsible, comment, version, created_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamptz, now()))""",
+            (entity["id"], *values[:-1], created),
+        )
+
+
 def upsert_payment(conn, entity: dict, version: int):
     contract_id = entity.get("contractId") or ""
     if contract_id and conn.execute("SELECT 1 FROM contracts WHERE id = %s", (contract_id,)).fetchone() is None:
@@ -709,7 +841,8 @@ def contract_bundle(conn, entity_id: str):
     children = [contract_from_row(row) for row in conn.execute("SELECT * FROM contracts WHERE parent_contract_id = %s", (entity_id,))]
     ids = [entity_id] + [child["id"] for child in children]
     payments = [payment_from_row(row) for row in conn.execute("SELECT * FROM payments WHERE contract_id = ANY(%s)", (ids,))]
-    return {"entity": contract, "specifications": specs, "children": children, "payments": payments}
+    addendums = [addendum_from_row(row) for row in conn.execute("SELECT * FROM addendums WHERE contract_id = %s", (entity_id,))]
+    return {"entity": contract, "specifications": specs, "children": children, "payments": payments, "addendums": addendums}
 
 
 def apply_saved(conn, kind: str, entity: dict, version: int):
@@ -721,9 +854,43 @@ def apply_saved(conn, kind: str, entity: dict, version: int):
         upsert_spec(conn, entity, version)
     elif kind == "dictionary":
         upsert_dictionary(conn, entity, version)
+    elif kind == "addendum":
+        upsert_addendum(conn, entity, version)
     else:
         upsert_payment(conn, entity, version)
     return public_copy(entity)
+
+
+def migrate_addendums(conn):
+    """Дочерние договоры категории «Доп. соглашение» переносятся в таблицу addendums, платежи — на договор-основание."""
+    rows = conn.execute("SELECT * FROM contracts WHERE category = 'addendum'").fetchall()
+    for row in rows:
+        item = contract_from_row(row)
+        parent_id = item.get("parentContractId") or ""
+        parent = load_contract(conn, parent_id) if parent_id else None
+        if not parent:
+            # без основания это обычный договор: категория была указана ошибочно
+            conn.execute("UPDATE contracts SET category = 'limit', parent_contract_id = '' WHERE id = %s", (item["id"],))
+            continue
+        if load_addendum(conn, item["id"]) is None:
+            upsert_addendum(conn, {
+                "id": item["id"],
+                "contractId": parent_id,
+                "number": item["number"],
+                "documentCard": item["documentCard"],
+                "approvalDate": item["reviewDate"] or item["date"],
+                "termChange": "",
+                "amount": Decimal(str(item["amount"])),
+                "vatRate": Decimal(str(item["vatRate"])),
+                "advancePercent": item.get("advancePercent"),
+                "responsible": item["responsible"],
+                "comment": item["comment"],
+                "createdAt": "",
+            }, 1)
+        conn.execute("UPDATE payments SET contract_id = %s WHERE contract_id = %s", (parent_id, item["id"]))
+        conn.execute("UPDATE contracts SET funding_contract_id = '' WHERE funding_contract_id = %s", (item["id"],))
+        conn.execute("UPDATE payments SET funding_contract_id = '' WHERE funding_contract_id = %s", (item["id"],))
+        conn.execute("DELETE FROM contracts WHERE id = %s", (item["id"],))
 
 
 def migrate_specifications(conn):
@@ -898,6 +1065,7 @@ def prepare_database():
                         conn.execute(sql)
                 seed(conn)
                 migrate_specifications(conn)
+                migrate_addendums(conn)
                 conn.execute("UPDATE payments SET counterparty = c.counterparty FROM contracts c WHERE payments.contract_id = c.id AND payments.counterparty = ''")
                 seed_dictionaries(conn)
             return
@@ -1227,7 +1395,7 @@ def api_logout(request: Request):
 def list_contracts(request: Request):
     guard(request, ALL_GROUPS)
     with transaction() as conn:
-        contracts, _, _ = fetch_all(conn)
+        contracts, _, _, _ = fetch_all(conn)
     return contracts
 
 
@@ -1235,7 +1403,7 @@ def list_contracts(request: Request):
 def list_specifications(request: Request):
     guard(request, ALL_GROUPS)
     with transaction() as conn:
-        _, specs, _ = fetch_all(conn)
+        _, specs, _, _ = fetch_all(conn)
     return specs
 
 
@@ -1243,8 +1411,16 @@ def list_specifications(request: Request):
 def list_payments(request: Request):
     guard(request, ALL_GROUPS)
     with transaction() as conn:
-        _, _, payments = fetch_all(conn)
+        _, _, payments, _ = fetch_all(conn)
     return payments
+
+
+@app.get("/api/addendums")
+def list_addendums(request: Request):
+    guard(request, ALL_GROUPS)
+    with transaction() as conn:
+        _, _, _, addendums = fetch_all(conn)
+    return addendums
 
 
 @app.get("/api/dictionaries")
@@ -1441,7 +1617,7 @@ def export_csv(contracts: list, payments: list) -> str:
             contract["comment"], display_choice(contract["documentKind"], CONTRACT_DOC_LABELS),
             display_choice(contract["direction"], [("income", "Доходный"), ("expense", "Расходный")]),
             display_choice(contract["kind"], [("framework", "Рамочный"), ("fixed", "Нерамочный")]),
-            display_choice(contract["category"], [("limit", "Лимит"), ("specification", "Спецификация"), ("request", "Заявка"), ("addendum", "Доп. соглашение")]),
+            display_choice(contract["category"], CATEGORY_LABELS),
             contract["startDate"], contract["endDate"], "да" if contract["otherExpense"] else "",
             display_choice(contract["status"], [("draft", "Черновик"), ("active", "Действует"), ("closed", "Завершен")]),
             "", "", "", "", "", "", "", "", "", "",
@@ -1494,6 +1670,8 @@ def contract_from_import(record: dict, line: int, contracts_by_number: dict | No
     direction = mapped(record["Направление"], DIRECTION, line, "Направление", "" if document_kind in ("invoice", "none") else "expense")
     kind = mapped(record["Вид договора"], CONTRACT_KIND, line, "Вид договора", "" if document_kind in ("invoice", "none") else "fixed")
     category = mapped(record["Категория"], CATEGORY, line, "Категория", "limit")
+    if category == "addendum":
+        raise RowProblem(line, "Категория", "доп. соглашения импортируются отдельным листом «Доп. соглашения»")
     parent = None
     if category != "limit":
         parent = resolve_contract_ref(record.get("Договор-основание", ""), contracts_by_number, line, "Договор-основание", True)
@@ -1622,7 +1800,7 @@ def index_contracts(contracts: list) -> dict:
     return found
 
 
-EXCEL_PAGES = ("contracts", "payments", "analytics", "dictionaries", "history")
+EXCEL_PAGES = ("contracts", "addendums", "payments", "analytics", "dictionaries", "history")
 THIN_BORDER = Border(
     left=Side(style="thin", color="E6EAF0"),
     right=Side(style="thin", color="E6EAF0"),
@@ -1640,12 +1818,12 @@ MONEY_FORMAT = "#,##0.00"
 DATE_FORMAT = "DD.MM.YYYY"
 KIND_LABELS = [("framework", "Рамочный"), ("fixed", "Нерамочный")]
 DIRECTION_LABELS = [("income", "Доходный"), ("expense", "Расходный")]
-CATEGORY_LABELS = [("limit", "Лимит"), ("specification", "Спецификация"), ("request", "Заявка"), ("addendum", "Доп. соглашение")]
+CATEGORY_LABELS = [("limit", "Лимит"), ("specification", "Спецификация"), ("request", "Заявка")]
 PAY_STATUS_LABELS = [("planned", "Запланирован"), ("paid", "Исполнен"), ("cancelled", "Отменен")]
 PAY_TYPE_LABELS = [("income", "Поступление"), ("expense", "Списание")]
 PAY_KIND_LABELS = [("advance", "Аванс"), ("postpay", "Постоплата"), ("gu", "ГУ"), ("stage", "ГУ")]
 SUBTYPE_LABELS = [("specification", "Спецификация"), ("request", "Заявка"), ("invoice", "Счёт")]
-AUDIT_SECTION = {"contract": "Договоры", "payment": "Платежи", "specification": "Спецификации", "dictionary": "Справочники"}
+AUDIT_SECTION = {"contract": "Договоры", "addendum": "Доп. соглашения", "payment": "Платежи", "specification": "Спецификации", "dictionary": "Справочники"}
 
 
 def excel_date(value):
@@ -1770,7 +1948,7 @@ def sheet_contracts(wb, contracts):
     ws = wb.active
     ws.title = "Договоры"
     headers = [
-        "Карта документа", "Номер договора", "Дата рассмотрения", "Дата регистрации", "Контрагент", "Вид", "Предмет",
+        "Карта документа", "Номер документа", "Дата рассмотрения", "Дата регистрации", "Контрагент", "Вид", "Предмет",
         "Сумма с НДС", "Ставка НДС", "Без НДС", "НДС", "Источник финансирования", "Проект", "Ответственный",
         "Вид документа", "Подвид", "Категория", "Договор-основание", "Прочие расходы", "Остаток лимита", "Остаток оплат", "% авансирования по условиям договора", "Комментарий",
     ]
@@ -1788,6 +1966,59 @@ def sheet_contracts(wb, contracts):
             write_excel_row(ws, contract_excel_values(child, by_id), kinds)
         group_excel_rows(ws, start, ws.max_row, 1)
     finish_excel_sheet(ws, [18, 18, 18, 18, 32, 14, 36, 16, 12, 16, 14, 24, 22, 18, 22, 14, 16, 20, 14, 16, 16, 22, 36])
+
+
+def addendum_excel_values(item, contract):
+    amount = excel_money(item.get("amount"))
+    rate = excel_money(item.get("vatRate"))
+    net = without_vat(amount, rate) if amount is not None and rate is not None else None
+    return [
+        item.get("documentCard") or "",
+        item.get("number") or "",
+        excel_date(item.get("approvalDate")),
+        item.get("termChange") or "",
+        contract.get("counterparty") or "",
+        contract.get("number") or "",
+        amount,
+        rate,
+        (amount - net).quantize(MONEY) if amount is not None and net is not None else None,
+        excel_money(item.get("advancePercent")),
+        item.get("responsible") or "",
+        item.get("comment") or "",
+    ]
+
+
+def sheet_addendums(wb, contracts, addendums):
+    ws = wb.active
+    ws.title = "Доп. соглашения"
+    ws.append([
+        "Карта документа", "Номер документа", "Дата согласования", "Изменение сроков", "Контрагент", "Номер договора",
+        "Сумма", "Ставка НДС", "НДС", "% авансирования", "Ответственный", "Комментарий",
+    ])
+    kinds = "ttdtttmmmmtt"
+    by_id = {item["id"]: item for item in contracts}
+    by_contract: dict[str, list] = {}
+    for item in addendums:
+        by_contract.setdefault(item["contractId"], []).append(item)
+    for contract in sorted(contracts, key=lambda item: text(item.get("number"))):
+        items = by_contract.get(contract["id"])
+        if not items:
+            continue
+        items.sort(key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))))
+        write_excel_row(ws, [
+            "", f"Договор № {contract['number']}", excel_date(contract.get("registrationDate") or contract.get("date")), "",
+            contract.get("counterparty") or "", contract.get("number") or "",
+            excel_money(contract.get("baseAmount")), excel_money(contract.get("baseVatRate")), None,
+            excel_money(contract.get("baseAdvancePercent")), contract.get("responsible") or "", "Исходные условия договора",
+        ], kinds, bold=True, fill=FILL_GROUP)
+        start = ws.max_row + 1
+        for item in items:
+            write_excel_row(ws, addendum_excel_values(item, contract), kinds)
+        group_excel_rows(ws, start, ws.max_row, 1)
+    for item in addendums:
+        if item["contractId"] not in by_id:
+            write_excel_row(ws, addendum_excel_values(item, {}), kinds)
+    finish_excel_sheet(ws, [18, 20, 16, 28, 32, 18, 16, 12, 14, 14, 22, 36])
 
 
 def payment_contract_label(payment, by_id):
@@ -2058,10 +2289,12 @@ def sheet_history(wb, history):
     finish_excel_sheet(ws, [16, 14, 18, 32, 48, 20])
 
 
-def build_excel(page: str, contracts, payments, dictionaries, history) -> bytes:
+def build_excel(page: str, contracts, payments, dictionaries, history, addendums=()) -> bytes:
     wb = Workbook()
     if page == "contracts":
         sheet_contracts(wb, contracts)
+    elif page == "addendums":
+        sheet_addendums(wb, contracts, list(addendums))
     elif page == "payments":
         sheet_payments(wb, contracts, payments)
     elif page == "analytics":
@@ -2081,7 +2314,7 @@ def build_excel(page: str, contracts, payments, dictionaries, history) -> bytes:
 def export_registry(request: Request):
     guard(request, ALL_GROUPS)
     with transaction() as conn:
-        contracts, _, payments = fetch_all(conn)
+        contracts, _, payments, _ = fetch_all(conn)
     content = export_csv(contracts, payments).encode("utf-8")
     return Response(content, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=registry.csv"})
 
@@ -2092,14 +2325,15 @@ def export_excel(request: Request, page: str = Query("contracts")):
         raise HTTPException(400, "Неизвестная страница")
     guard(request, AUDIT_GROUPS if page == "history" else ALL_GROUPS)
     with transaction() as conn:
-        contracts, _, payments = fetch_all(conn)
+        contracts, _, payments, addendums = fetch_all(conn)
         dictionaries = [dictionary_from_row(row) for row in conn.execute("SELECT * FROM dictionaries ORDER BY kind, lower(value)")]
         history = []
         if page == "history":
             history = conn.execute("SELECT ts, actor, action, entity_type, label FROM audit_log ORDER BY id DESC").fetchall()
-    content = build_excel(page, contracts, payments, dictionaries, history)
+    content = build_excel(page, contracts, payments, dictionaries, history, addendums)
     filenames = {
         "contracts": "contracts.xlsx",
+        "addendums": "addendums.xlsx",
         "payments": "payments.xlsx",
         "analytics": "analytics.xlsx",
         "dictionaries": "dictionaries.xlsx",
@@ -2247,6 +2481,13 @@ def create_entity(request: Request, kind: str, payload: dict):
             saved = apply_saved(conn, kind, entity, 1)
             label = f"{DICTIONARY_LABELS[saved['kind']]} · {saved['value']}"
             action = "Значение справочника добавлено"
+        elif kind == "addendum":
+            entity = normalize_addendum(payload, None)
+            if load_addendum(conn, entity["id"]):
+                raise HTTPException(409, "Строку уже изменили")
+            saved = apply_saved(conn, kind, entity, 1)
+            label = f"ДС № {saved['number']} · {saved['amount']}"
+            action = "Доп. соглашение добавлено"
         else:
             entity = normalize_payment(payload, None)
             if load_payment(conn, entity["id"]):
@@ -2275,6 +2516,9 @@ def update_entity(request: Request, kind: str, entity_id: str, payload: dict):
         elif kind == "dictionary":
             entity = normalize_dictionary({**payload, "id": entity_id}, current)
             action, label = "Значение справочника изменено", f"{DICTIONARY_LABELS[entity['kind']]} · {entity['value']}"
+        elif kind == "addendum":
+            entity = normalize_addendum({**payload, "id": entity_id}, current)
+            action, label = "Доп. соглашение изменено", f"ДС № {entity['number']} · {entity['amount']}"
         else:
             entity = normalize_payment({**payload, "id": entity_id}, current)
             action, label = "Операция изменена", f"{entity['number']} · {entity['amount']}"
@@ -2305,6 +2549,9 @@ def delete_entity(request: Request, kind: str, entity_id: str, version: int):
         elif kind == "dictionary":
             before, label, action = current, f"{DICTIONARY_LABELS[current['kind']]} · {current['value']}", "Значение справочника удалено"
             conn.execute("DELETE FROM dictionaries WHERE id = %s AND version = %s", (entity_id, version))
+        elif kind == "addendum":
+            before, label, action = current, f"ДС № {current['number']} · {current['amount']}", "Доп. соглашение удалено"
+            conn.execute("DELETE FROM addendums WHERE id = %s AND version = %s", (entity_id, version))
         else:
             before, label, action = current, f"{current['number']} · {current['amount']}", "Операция удалена"
             conn.execute("DELETE FROM payments WHERE id = %s AND version = %s", (entity_id, version))
@@ -2357,6 +2604,21 @@ def delete_payment(request: Request, entity_id: str, version: int):
     return delete_entity(request, "payment", entity_id, version)
 
 
+@app.post("/api/addendums")
+def post_addendum(request: Request, payload: dict = Body()):
+    return create_entity(request, "addendum", payload)
+
+
+@app.patch("/api/addendums/{entity_id}")
+def patch_addendum(request: Request, entity_id: str, payload: dict = Body()):
+    return update_entity(request, "addendum", entity_id, payload)
+
+
+@app.delete("/api/addendums/{entity_id}")
+def delete_addendum(request: Request, entity_id: str, version: int):
+    return delete_entity(request, "addendum", entity_id, version)
+
+
 @app.post("/api/dictionaries")
 def post_dictionary(request: Request, payload: dict = Body()):
     return create_entity(request, "dictionary", payload)
@@ -2372,8 +2634,8 @@ def delete_dictionary(request: Request, entity_id: str, version: int):
     return delete_entity(request, "dictionary", entity_id, version)
 
 
-TABLES = {"contract": "contracts", "specification": "specifications", "payment": "payments", "dictionary": "dictionaries"}
-LOADERS = {"contract": load_contract, "specification": load_spec, "payment": load_payment, "dictionary": load_dictionary}
+TABLES = {"contract": "contracts", "specification": "specifications", "payment": "payments", "dictionary": "dictionaries", "addendum": "addendums"}
+LOADERS = {"contract": load_contract, "specification": load_spec, "payment": load_payment, "dictionary": load_dictionary, "addendum": load_addendum}
 
 
 def restore_record(conn, kind: str, entity: dict):
@@ -2405,6 +2667,8 @@ def rollback(request: Request, audit_id: int):
                 restore_record(conn, "specification", spec)
             for payment in before.get("payments") or []:
                 restore_record(conn, "payment", payment)
+            for addendum in before.get("addendums") or []:
+                restore_record(conn, "addendum", addendum)
             after = before
         elif before is None:
             table = TABLES[kind]
