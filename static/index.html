@@ -146,8 +146,7 @@
     }
     th.sortable { cursor: pointer; user-select: none; }
     .table-wrap.can-edit .data-table td[data-field],
-    .table-wrap.can-edit .payment-subtable tr[data-payment-id] td,
-    .table-wrap.can-edit .spec-head[data-spec-id],
+    .table-wrap.can-edit .data-table tr[data-payment-id] td[data-field],
     #dictionaries-grid.can-edit .dict-list li[data-id] span { cursor: cell; }
     th.sortable:hover { color: var(--blue-deep); }
     td { padding: 0 8px; border-right: 1px solid #e0e4ea; border-bottom: 1px solid #e0e4ea; vertical-align: middle; }
@@ -187,28 +186,12 @@
     .expand-btn.open { color: var(--blue-deep); border-color: #8ec9c3; background: var(--blue-soft); }
     .expand-btn .chev { display: inline-block; transition: transform .15s ease; }
     .expand-btn.open .chev { transform: rotate(90deg); }
-    tr.detail-row > td { padding: 0; height: auto; max-height: none; white-space: normal; background: #f7f9fc; border-color: #dce3ef; }
-    tr.detail-row:hover > td { background: #f7f9fc; }
-    .payment-detail { padding: 10px 14px 12px 48px; position: sticky; left: 0; box-sizing: border-box; }
-    .spec-block { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #dbe1ea; }
-    .spec-block:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
-    .spec-head { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; color: #334155; }
-    .spec-head .spec-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .spec-actions { margin-left: auto; display: inline-flex; gap: 4px; flex: none; }
-    .day-group { margin: 4px 0; border: 1px solid #e0e4ea; border-radius: 8px; background: #fff; }
-    .day-group summary {
-      display: grid; grid-template-columns: 110px 1fr 150px 90px; gap: 10px; align-items: center;
-      padding: 7px 10px; cursor: pointer; font-size: 12px; list-style: none;
-    }
-    .day-group summary::-webkit-details-marker { display: none; }
-    .day-group summary:hover { background: #fbfcff; }
-    .day-group summary .money { text-align: right; }
-    .day-group[open] summary { border-bottom: 1px solid #e8ebf0; }
-    .payment-subtable { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
-    .payment-subtable th { position: static; padding: 6px 9px; font-size: 10px; background: #f8f9fb; border: 0; border-bottom: 1px solid #e8ebf0; text-align: center; }
-    .payment-subtable td { padding: 6px 9px; font-size: 12px; border: 0; border-bottom: 1px solid #f0f2f5; height: auto; max-height: none; white-space: normal; overflow: visible; }
-    .payment-subtable tr:last-child td { border-bottom: 0; }
-    .payment-subtable .cell-number { text-align: right; }
+    .data-table tr.row-pay > td { background: #fffdf7; color: #475569; }
+    .data-table tr.row-pay > td:first-child { box-shadow: inset 3px 0 #f0c674; }
+    .data-table tr.row-pay-deep > td:first-child { box-shadow: inset 3px 0 #f0c674, inset 6px 0 #fffdf7, inset 9px 0 #b7ddd8; }
+    .data-table tr.row-pay > td .main-cell { font-weight: 600; }
+    .data-table tr.row-pay td.actions-col { background: #fffdf7; }
+    .data-table tr.row-pay-empty > td { color: var(--muted); font-style: italic; }
     .payment-empty { padding: 8px 0; font-size: 12px; color: var(--muted); }
     .main-cell { font-weight: 650; }
     .money { font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -249,6 +232,15 @@
     .tree-table tr.row-total > td { background: #eef3ea; font-weight: 700; }
     .tree-table tr.row-balance > td { background: #e7f5f3; font-weight: 700; }
     .tree-table .name { display: inline-flex; gap: 8px; align-items: center; }
+
+    /* ---------- дубль карты документа: розовая подсветка строки на всех страницах ---------- */
+    .data-table tbody tr.dup-card > td, .tree-table tbody tr.dup-card > td,
+    .data-table tbody tr.dup-card:hover > td, .tree-table tbody tr.dup-card:hover > td,
+    .data-table tbody tr.dup-card > td.actions-col { background: #fce4ec; }
+    .data-table tbody tr.dup-card:hover > td, .tree-table tbody tr.dup-card:hover > td { background: #f8d7e3; }
+    .data-table tbody tr.dup-card:hover > td.actions-col { background: #f8d7e3; }
+    .data-table tbody tr.dup-card > td:first-child, .tree-table tbody tr.dup-card > td:first-child { box-shadow: inset 3px 0 #e2557f; }
+    .data-table tr.edit-row.dup-card input[name="documentCard"] { border-color: #e2557f; background: #fff0f5; }
     .dash {
       border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 10px; margin-bottom: 16px;
       color: var(--ink); background: var(--surface); box-shadow: var(--shadow);
@@ -583,6 +575,37 @@
   /* ---------- модель ---------- */
   function contractById(id) { return state.contracts.find(c => c.id === id); }
   function childrenOf(contractId) { return state.contracts.filter(c => c.parentContractId === contractId); }
+  /* ---------- дубли карты документа (по договорам и платежам вместе) ---------- */
+  let duplicateCards = new Set();
+  function cardKey(value) { return String(value || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+  function refreshDuplicateCards() {
+    const seen = new Map();
+    [...state.contracts, ...state.payments].forEach(item => {
+      const key = cardKey(item.documentCard);
+      if (key) seen.set(key, (seen.get(key) || 0) + 1);
+    });
+    duplicateCards = new Set([...seen].filter(([, n]) => n > 1).map(([key]) => key));
+  }
+  function isDuplicateCard(item) { return duplicateCards.has(cardKey(item?.documentCard)); }
+  function dupClass(item) { return isDuplicateCard(item) ? 'dup-card' : ''; }
+  function dupTitle(item) { return isDuplicateCard(item) ? ' title="Карта документа уже используется в другой записи"' : ''; }
+  function cardUsedElsewhere(value, selfId) {
+    const key = cardKey(value);
+    if (!key) return false;
+    return [...state.contracts, ...state.payments].some(item => item.id !== selfId && cardKey(item.documentCard) === key);
+  }
+  // Подсветка строки редактирования прямо во время ввода карты документа
+  function markEditDuplicate(row) {
+    const input = row?.querySelector('[name=documentCard]');
+    if (!input) return;
+    const selfId = editing && !editing.isNew ? editing.id : '';
+    const dup = cardUsedElsewhere(input.value, selfId);
+    row.classList.toggle('dup-card', dup);
+    input.title = dup ? 'Карта документа уже используется в другой записи' : '';
+  }
+  document.addEventListener('input', event => {
+    if (event.target?.name === 'documentCard') markEditDuplicate(event.target.closest('tr.edit-row'));
+  });
   function isTop(c) { return !c.parentContractId; }
   function contractLabel(c, withCounterparty = false) {
     if (!c) return '—';
@@ -805,11 +828,6 @@
       document.getElementById(`dict-edit-${dict.dataset.id}`)?.focus();
       return;
     }
-    const spec = event.target.closest('.spec-head[data-spec-id]');
-    if (spec) {
-      startContractRow(spec.dataset.specId);
-      return;
-    }
     const payment = event.target.closest('tr[data-payment-id]');
     if (payment) {
       startPaymentRow(payment.dataset.paymentId, event.target.closest('td')?.dataset.field || '');
@@ -822,56 +840,47 @@
     else startPaymentRow(row.dataset.id, field);
   });
 
-  /* ---------- раскрытие договора: платежи по дням ---------- */
-  function paymentsByDay(payments) {
-    if (!payments.length) return '<div class="payment-empty">Операций нет</div>';
-    const groups = new Map();
-    payments.forEach(p => {
-      const key = String(p.paymentDate || '').slice(0, 10);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(p);
-    });
-    return [...groups.entries()].sort((a, b) => (a[0] ? b[0] ? b[0].localeCompare(a[0]) : -1 : 1)).map(([day, list]) => {
-      const total = sumAmount(list);
-      const paid = sumPaid(list);
-      const numbers = list.map(p => p.number).join(', ');
-      return `<details class="day-group">
-        <summary>
-          <strong>${day ? showDate(day) : 'Без даты оплаты'}</strong>
-          <span title="${esc(numbers)}">${list.length} опер.: ${esc(numbers)}</span>
-          <span class="money">${money(total)}</span>
-          <span>${paid === total ? '<span class="badge green">Исполнено</span>' : `<span class="badge blue">исп. ${money(paid)}</span>`}</span>
-        </summary>
-        <table class="payment-subtable"><thead><tr>
-          <th style="width:110px">№</th><th style="width:90px">Вид</th><th style="width:130px">Сумма</th><th style="width:110px">Статус</th><th>Комментарий</th><th style="width:40px"></th>
-        </tr></thead><tbody>${list.map(p => `<tr data-payment-id="${esc(p.id)}">
-          <td data-field="number"><strong>${esc(p.number)}</strong></td>
-          <td class="cell-center" data-field="type"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${p.type === 'income' ? 'Пост.' : 'Спис.'}</span></td>
-          <td class="money cell-number" data-field="amount">${money(p.amount)}</td>
-          <td class="cell-center">${statusBadge(p.status)}</td>
-          <td data-field="comment">${esc(p.comment || '—')}</td>
-          <td class="cell-center">${canEdit() ? `<button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button>` : ''}</td>
-        </tr>`).join('')}</tbody></table>
-      </details>`;
-    }).join('');
-  }
+  /* ---------- раскрытие договора: платежи строками той же таблицы ---------- */
   function toggleContractExpand(contractId) {
     if (expandedContracts.has(contractId)) expandedContracts.delete(contractId);
     else expandedContracts.add(contractId);
     renderContracts();
   }
-  function contractDetailBlock(c) {
-    const kids = childrenOf(c.id);
-    const own = paymentsForContract(c.id);
-    const width = Math.max(640, (document.getElementById('contracts-table').clientWidth || 1200) - 8);
-    const box = `<div class="payment-detail" style="width:${width}px">`;
-    const shown = kids.filter(s => !(editing?.type === 'contract' && !editing.isNew && editing.id === s.id)).sort(compareContracts);
-    if (!shown.length) return `${box}${paymentsByDay(own)}</div>`;
-    const actions = s => canEdit() ? `<span class="spec-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${s.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${s.id}')">⌫</button></span>` : '';
-    return `${box}${shown.map(s => {
-      const remain = contractPayRemainder(s);
-      return `<div class="spec-block"><div class="spec-head" data-spec-id="${esc(s.id)}"><span class="spec-title"><strong>${labels[s.category] || 'Спецификация'} ${esc(s.number)}</strong> · ${esc(s.subject)} · лимит ${money(s.amount)} · <span class="${remain < 0 ? 'neg' : ''}">остаток оплат: ${money(remain)}</span></span>${actions(s)}</div>${paymentsByDay(paymentsForContract(s.id))}</div>`;
-    }).join('')}<div class="spec-block"><div class="spec-head"><span class="spec-title"><strong>Платежи по договору вне спецификаций</strong></span></div>${paymentsByDay(own)}</div></div>`;
+  // Платёж в реестре договоров: та же сетка колонок, что и у договора (CONTRACT_COLS)
+  function contractPaymentRow(p, owner, depth = 1) {
+    const gross = Number(p.amount) || Number(p.approvalAmount) || 0;
+    const rate = p.approvalVatRate ?? DEFAULT_VAT;
+    const wovat = amountWithoutVat(gross, rate);
+    const kind = p.paymentKind === 'stage' ? 'gu' : p.paymentKind;
+    return `<tr class="row-pay ${depth > 1 ? 'row-pay-deep' : ''} ${dupClass(p)}" data-payment-id="${esc(p.id)}">
+          <td class="expand-col"></td>
+          <td data-field="documentCard"${dupTitle(p)}>${cellText(p.documentCard)}</td>
+          <td data-field="number"><div class="main-cell" title="${esc(p.number)}">₽ ${esc(p.number || '—')}</div></td>
+          <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
+          <td data-field="paymentDate">${showDate(p.paymentDate)}</td>
+          <td data-field="counterparty"><div class="main-cell" title="${esc(p.counterparty || owner.counterparty)}">${esc(p.counterparty || owner.counterparty || '—')}</div></td>
+          <td class="cell-center" data-field="type"><span class="badge ${p.type === 'income' ? 'green' : 'amber'}">${payTypeLabel[p.type] || '—'}</span></td>
+          <td>${executionBadge(p.status)}</td>
+          ${moneyCell(gross, '', 'amount')}
+          <td class="cell-center" data-field="approvalVatRate">${rate ? rate + '%' : '—'}</td>
+          ${moneyCell(wovat)}
+          <td data-field="fundingContractId">${cellText(fundingLabel(p.fundingContractId || owner.fundingContractId))}</td>
+          <td>${cellText(p.project || owner.project)}</td>
+          <td data-field="responsible">${cellText(p.responsible)}</td>
+          <td class="cell-center" data-field="documentKind">${cellText(payDocLabel[p.documentKind] || '')}</td>
+          <td class="cell-center" data-field="subtype">${labels[p.subtype] || '—'}</td>
+          <td class="cell-center" data-field="paymentKind">${labels[kind] || '—'}</td>
+          <td data-field="contractId">${cellText(contractLabel(owner))}</td>
+          <td class="cell-center">—</td>
+          <td class="cell-number">—</td>
+          <td class="cell-number">—</td>
+          <td class="cell-center">—</td>
+          <td data-field="comment">${cellText(p.comment)}</td>
+          <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startPaymentRow('${p.id}')">✎</button></div>` : ''}</td>
+        </tr>`;
+  }
+  function emptyPaymentsRow(depth = 1) {
+    return `<tr class="row-pay ${depth > 1 ? 'row-pay-deep' : ''} row-pay-empty"><td class="expand-col"></td><td></td><td colspan="${CONTRACT_COLS.length - 3}">Операций нет</td><td class="actions-col"></td></tr>`;
   }
 
   /* ---------- договоры ---------- */
@@ -938,24 +947,21 @@
     return key(a).localeCompare(key(b)) * contractSort.dir || String(a.number).localeCompare(String(b.number), 'ru');
   }
   function renderContracts() {
+    refreshDuplicateCards();
     const {rows, openParents} = topContracts();
     const editItem = editing?.type === 'contract'
       ? (editing.isNew ? {id:'new', direction:'expense', kind:'fixed', documentKind:'contract', category:'limit', vatRate:DEFAULT_VAT, status:'active'} : contractById(editing.id))
       : null;
-    const colSpan = CONTRACT_COLS.length;
-    const body = `${editItem && editing.isNew ? contractEditRow(editItem) : ''}${rows.map(c => {
-        if (editItem && c.id === editing.id) return contractEditRow(c);
-        const limitRem = contractLimitRemainder(c);
-        const payRem = contractPayRemainder(c);
-        const wovat = c.amountWithoutVat ?? amountWithoutVat(c.amount, c.vatRate);
-        const kids = childrenOf(c.id);
-        const childCount = paymentsForContract(c.id).length + kids.length;
-        const editingChild = editItem && !editing.isNew && editItem.parentContractId === c.id;
-        const open = expandedContracts.has(c.id) || openParents.has(c.id) || editingChild;
-        return `<tr data-id="${esc(c.id)}">
-          <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="Спецификации и платежи"><span class="chev">▸</span>${childCount ? `<span class="count">${childCount}</span>` : ''}</button></td>
-          <td data-field="documentCard">${cellText(c.documentCard)}</td>
-          <td data-field="number"><div class="main-cell" title="${esc(c.number)}">№ ${esc(c.number)}</div></td>
+    const isEditing = c => editItem && !editing.isNew && c.id === editing.id;
+    const contractRow = (c, open, parent = null) => {
+      const limitRem = contractLimitRemainder(c);
+      const payRem = contractPayRemainder(c);
+      const wovat = c.amountWithoutVat ?? amountWithoutVat(c.amount, c.vatRate);
+      const childCount = paymentsForContract(c.id).length + childrenOf(c.id).length;
+      return `<tr data-id="${esc(c.id)}" class="${parent ? 'row-child' : ''} ${dupClass(c)}">
+          <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${c.id}')" title="${parent ? 'Платежи' : 'Спецификации и платежи'}"><span class="chev">▸</span>${childCount ? `<span class="count">${childCount}</span>` : ''}</button></td>
+          <td data-field="documentCard"${dupTitle(c)}>${cellText(c.documentCard)}</td>
+          <td data-field="number"><div class="main-cell" title="${esc(parent ? `${labels[c.category] || 'Спецификация'} ${c.number} к договору № ${parent.number}` : c.number)}">${parent ? `↳ ${esc(c.number)}` : `№ ${esc(c.number)}`}</div></td>
           <td data-field="reviewDate">${showDate(c.reviewDate || c.date)}</td>
           <td data-field="registrationDate">${showDate(c.registrationDate || c.date)}</td>
           <td data-field="counterparty"><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
@@ -970,14 +976,34 @@
           <td class="cell-center" data-field="documentKind">${labels[c.documentKind] || '—'}</td>
           <td class="cell-center" data-field="kind">${labels[c.kind] || '—'}</td>
           <td class="cell-center" data-field="category">${labels[c.category] || '—'}</td>
-          <td data-field="parentContractId">—</td>
+          <td data-field="parentContractId">${parent ? cellText(`№ ${parent.number}`) : '—'}</td>
           <td class="cell-center" data-field="otherExpense">${c.otherExpense ? 'да' : '—'}</td>
           ${limitRem === null ? '<td class="cell-number">—</td>' : moneyCell(limitRem)}
           ${moneyCell(payRem)}
           ${percentCell(c.advancePercent, 'advancePercent')}
           <td data-field="comment">${cellText(c.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startContractRow('${c.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeContract('${c.id}')">⌫</button></div>` : ''}</td>
-        </tr>${editingChild ? contractEditRow(editItem) : ''}${open ? `<tr class="detail-row"><td colspan="${colSpan}">${contractDetailBlock(c)}</td></tr>` : ''}`;
+        </tr>`;
+    };
+    const paymentRows = (owner, depth) => {
+      const list = paymentsForContract(owner.id);
+      return list.length ? list.map(p => contractPaymentRow(p, owner, depth)).join('') : emptyPaymentsRow(depth);
+    };
+    const body = `${editItem && editing.isNew ? contractEditRow(editItem) : ''}${rows.map(c => {
+        const kids = childrenOf(c.id).sort(compareContracts);
+        const editingChild = kids.some(isEditing);
+        const open = expandedContracts.has(c.id) || openParents.has(c.id) || editingChild;
+        let html = isEditing(c) ? contractEditRow(c) : contractRow(c, open);
+        if (!open) return html;
+        const own = paymentsForContract(c.id);
+        if (!kids.length || own.length) html += paymentRows(c, 1);
+        kids.forEach(k => {
+          if (isEditing(k)) { html += contractEditRow(k); return; }
+          const kidOpen = expandedContracts.has(k.id);
+          html += contractRow(k, kidOpen, c);
+          if (kidOpen) html += paymentRows(k, 2);
+        });
+        return html;
       }).join('')}`;
     const contractHead = headRow(CONTRACT_COLS, c => c.sort ? {
       cls: 'sortable',
@@ -1015,6 +1041,7 @@
   function applyContractFieldRules() {
     const row = document.getElementById('contract-edit-row');
     if (!row) return;
+    markEditDuplicate(row);
     const documentKind = row.querySelector('[name=documentKind]');
     const direction = row.querySelector('[name=direction]');
     const kind = row.querySelector('[name=kind]');
@@ -1114,7 +1141,6 @@
     {label:'Исполнение', w:120},
     {label:'Договор', w:150},
     {label:'Контрагент', w:220},
-    {label:'Источник финансирования', w:190},
     {label:'Сумма с НДС', w:130, cls:'num'},
     {label:'НДС', w:125, cls:'num'},
     {label:'Без НДС', w:130, cls:'num'},
@@ -1125,6 +1151,7 @@
     {label:'БДДС', w:170},
     {label:'ЦФО', w:170},
     {label:'Вид оплаты', w:105},
+    {label:'Источник финансирования', w:190},
     {label:'Ответств.', w:150},
     {label:'Коммент.', w:240},
     {label:'', w:88, cls:'actions-col'}
@@ -1140,6 +1167,7 @@
     return list.sort((a, b) => key(a).localeCompare(key(b)) * paymentSort.dir || String(a.number).localeCompare(String(b.number)));
   }
   function renderPayments() {
+    refreshDuplicateCards();
     const rows = filteredPayments();
     const editItem = editing?.type === 'payment'
       ? (editing.isNew ? {id:'new', type:'expense', paymentKind:'postpay', documentKind:'contract', subtype:'invoice', status:'planned', approvalVatRate:DEFAULT_VAT} : state.payments.find(p => p.id === editing.id))
@@ -1153,15 +1181,14 @@
         const vat = p.approvalVatAmount ?? vatSum(gross, rate);
         const kind = p.paymentKind === 'stage' ? 'gu' : p.paymentKind;
         const funding = fundingLabel(p.fundingContractId || c?.fundingContractId);
-        return `<tr data-id="${esc(p.id)}">
-          <td data-field="documentCard">${cellText(p.documentCard)}</td>
+        return `<tr data-id="${esc(p.id)}" class="${dupClass(p)}">
+          <td data-field="documentCard"${dupTitle(p)}>${cellText(p.documentCard)}</td>
           <td data-field="number"><div class="main-cell" title="${esc(p.number)}">${esc(p.number || '—')}</div></td>
           <td data-field="approvalDate">${showDate(p.approvalDate || p.date)}</td>
           <td data-field="paymentDate">${showDate(p.paymentDate)}</td>
           <td class="cell-center">${executionBadge(p.status)}</td>
           <td data-field="contractId">${cellText(c ? contractLabel(c) : '')}</td>
           <td data-field="counterparty">${cellText(p.counterparty || c?.counterparty)}</td>
-          <td data-field="fundingContractId">${cellText(funding)}</td>
           ${moneyCell(gross, '', 'approvalAmount')}
           <td class="money cell-number" data-field="approvalVatRate" title="${esc(money(vat))} · ставка ${rate}%">${money(vat)} <small style="color:var(--muted);font-weight:500">(${rate}%)</small></td>
           ${moneyCell(wovat)}
@@ -1172,6 +1199,7 @@
           <td data-field="bdds">${cellText(p.bdds)}</td>
           <td data-field="cfo">${cellText(p.cfo)}</td>
           <td class="cell-center" data-field="paymentKind">${labels[kind] || '—'}</td>
+          <td data-field="fundingContractId">${cellText(funding)}</td>
           <td data-field="responsible">${cellText(p.responsible)}</td>
           <td data-field="comment">${cellText(p.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" onclick="startPaymentRow('${p.id}')">✎</button><button class="icon-btn delete" onclick="removePayment('${p.id}')">⌫</button></div>` : ''}</td>
@@ -1202,9 +1230,13 @@
   function applyPaymentFieldRules() {
     const row = document.getElementById('payment-edit-row');
     if (!row) return;
+    markEditDuplicate(row);
     const documentKind = row.querySelector('[name=documentKind]').value;
     const contract = row.querySelector('[name=contractId]');
     const funding = row.querySelector('[name=fundingContractId]');
+    const number = row.querySelector('[name=number]');
+    number.required = documentKind !== 'none';
+    number.placeholder = number.required ? 'П-001' : 'Необязательно';
     const byContract = documentKind === 'contract';
     contract.disabled = !byContract;
     contract.required = byContract;
@@ -1247,7 +1279,6 @@
       <td class="cell-center">${executionBadge(p.paymentDate ? (p.status === 'cancelled' ? 'cancelled' : 'paid') : 'planned')}</td>
       <td><select name="contractId" onchange="autofillPayment()"><option value="">Договор</option>${optionTags(paymentContractOptions(), p.contractId || '')}</select></td>
       <td><input name="counterparty" required value="${esc(p.counterparty || c?.counterparty || '')}" placeholder="Контрагент" list="counterparty-list"></td>
-      <td><select name="fundingContractId">${optionTags(fundingOptions(), p.fundingContractId || '')}</select></td>
       <td><input name="approvalAmount" inputmode="decimal" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма" autocomplete="off"></td>
       <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? DEFAULT_VAT)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
@@ -1258,6 +1289,7 @@
       <td>${dictSelect('bdds', 'bdds', p.bdds || '')}</td>
       <td>${dictSelect('cfo', 'cfo', p.cfo || '')}</td>
       <td><select name="paymentKind">${optionTags([['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']], kind)}</select></td>
+      <td><select name="fundingContractId">${optionTags(fundingOptions(), p.fundingContractId || '')}</select></td>
       <td><input name="responsible" value="${esc(p.responsible)}" placeholder="ФИО"></td>
       <td><input name="comment" value="${esc(p.comment)}" placeholder="Комментарий"></td>
       <td class="actions-col"><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="savePaymentRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
@@ -1266,6 +1298,7 @@
 
   /* ---------- аналитика ---------- */
   const TREE_COLS = [
+    {label:'Карта документа', w:120},
     {label:'', w:44, cls:'expand-col'},
     {label:'Договор', w:300},
     {label:'Рамочный / нерамочный', w:110},
@@ -1315,6 +1348,7 @@
     const key = c.id;
     const btn = extra.expandable && kids.length ? expandBtn(key, kids.length) : (extra.btn || '');
     const parts = [
+      `<td${dupTitle(c)}>${cellText(c.documentCard)}</td>`,
       `<td class="expand-col">${btn}</td>`,
       `<td title="${esc(title)}">${esc(title)}</td>`,
       `<td class="cell-center">${labels[c.kind] || '—'}</td>`,
@@ -1329,11 +1363,11 @@
       percentCell(c.advancePercent),
       percentCell(factPercent(fact, limit))
     ];
-    let html = treeRow(cls, parts);
+    let html = treeRow(`${cls} ${dupClass(c)}`, parts);
     if (extra.expandable && kids.length && isOpen(key)) {
       kids.forEach(k => { html += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
       const free = contractLimitRemainder(c);
-      if (free != null) html += treeRow('row-spec', [EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
+      if (free != null) html += treeRow('row-spec', [EMPTY, EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
     }
     return html;
   }
@@ -1342,14 +1376,15 @@
     const total = sumAmount(list);
     const paid = sumPaid(list);
     let html = treeRow('row-pay', [
+      EMPTY,
       `<td class="expand-col">${expandBtn(key, list.length)}</td>`,
       `<td>Счета без договора (${list.length})</td>`, EMPTY, EMPTY, '<td class="cell-center"><span class="badge gray">Счета</span></td>', EMPTY,
       moneyCell(total), moneyCell(paid), moneyCell(total - paid), EMPTY, EMPTY, EMPTY, percentCell(factPercent(paid, total))
     ]);
     if (isOpen(key)) {
       list.forEach(p => {
-        html += treeRow('row-spec', [
-          EMPTY, `<td title="${esc(p.number)}">${esc(p.number)} · ${showDate(p.paymentDate || p.date)}${p.comment ? ' · ' + esc(p.comment) : ''}</td>`, EMPTY,
+        html += treeRow(`row-spec ${dupClass(p)}`, [
+          `<td${dupTitle(p)}>${cellText(p.documentCard)}</td>`, EMPTY, `<td title="${esc(p.number)}">${esc(p.number)} · ${showDate(p.paymentDate || p.date)}${p.comment ? ' · ' + esc(p.comment) : ''}</td>`, EMPTY,
           `<td>${cellText(p.counterparty)}</td>`, `<td class="cell-center">${payDocLabel[p.documentKind] || '—'}</td>`, `<td>${cellText(p.project)}</td>`,
           moneyCell(p.amount), moneyCell(p.status === 'paid' ? p.amount : 0), EMPTY, EMPTY, EMPTY, EMPTY, percentCell(factPercent(p.status === 'paid' ? p.amount : 0, p.amount))
         ]);
@@ -1373,6 +1408,7 @@
     dash.innerHTML = `<div class="dash-head"><h3>Свободный остаток по доходным договорам — можем законтрактовать</h3><span>лимит доходного договора минус привязанные расходные договоры и счета · всего ${money(total)} · ${items.length}</span><button type="button" class="btn small" onclick="toggleDashboard()">${dashOpen ? 'Скрыть' : 'Показать'}</button></div>${dashOpen ? `<div class="dash-body">${rows}</div>` : ''}`;
   }
   function renderAnalytics() {
+    refreshDuplicateCards();
     const income = incomeContracts();
     const expense = state.contracts.filter(c => isExpenseSide(c) && !c.otherExpense);
     const incomeLimit = sumAmount(income);
@@ -1418,6 +1454,7 @@
       const total = sumAmount(orphans) + sumAmount(orphanFree);
       const fact = orphans.reduce((s, c) => s + contractFact(c), 0) + sumPaid(orphanFree);
       rows += treeRow('row-free', [
+        EMPTY,
         `<td class="expand-col">${expandBtn('nofunding', orphans.length + (orphanFree.length ? 1 : 0))}</td>`,
         '<td>[!] Без источника финансирования</td>', EMPTY, EMPTY, EMPTY, EMPTY,
         moneyCell(total), moneyCell(fact), moneyCell(total - fact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(fact, total))
@@ -1427,9 +1464,9 @@
         if (!filtering) rows += freePaymentsRows(orphanFree, 'free-nofunding');
       }
     }
-    rows += treeRow('row-total', ['<td></td><td>Итого доходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit), moneyCell(incomeFact), moneyCell(incomeLimit - incomeFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(incomeFact, incomeLimit))]);
-    rows += treeRow('row-total', ['<td></td><td>Итого расходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(expenseLimit), moneyCell(expenseFact), moneyCell(expenseLimit - expenseFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(expenseFact, expenseLimit))]);
-    rows += treeRow('row-balance', ['<td></td><td>Остаток (доход − расход)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit - expenseLimit), moneyCell(incomeFact - expenseFact), moneyCell((incomeLimit - incomeFact) - (expenseLimit - expenseFact)), EMPTY, EMPTY, EMPTY, EMPTY]);
+    rows += treeRow('row-total', ['<td></td><td></td><td>Итого доходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit), moneyCell(incomeFact), moneyCell(incomeLimit - incomeFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(incomeFact, incomeLimit))]);
+    rows += treeRow('row-total', ['<td></td><td></td><td>Итого расходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(expenseLimit), moneyCell(expenseFact), moneyCell(expenseLimit - expenseFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(expenseFact, expenseLimit))]);
+    rows += treeRow('row-balance', ['<td></td><td></td><td>Остаток (доход − расход)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit - expenseLimit), moneyCell(incomeFact - expenseFact), moneyCell((incomeLimit - incomeFact) - (expenseLimit - expenseFact)), EMPTY, EMPTY, EMPTY, EMPTY]);
     document.getElementById('analytics-tree').innerHTML = `<table class="tree-table" style="width:${tableWidth(TREE_COLS)}px">${colgroup(TREE_COLS)}${headRow(TREE_COLS)}<tbody>${rows}</tbody></table>`;
     document.getElementById('analytics-expand-all').textContent = analyticsAllOpen ? 'Свернуть всё' : 'Развернуть всё';
 
