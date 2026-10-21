@@ -2011,10 +2011,15 @@
     let html = treeRow(`${cls} ${dupClass(c)}`, parts);
     if (extra.expandable && kids.length && isOpen(key)) {
       kids.forEach(k => { html += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
-      const free = contractLimitRemainder(c);
-      if (free != null) html += treeRow('row-spec', [EMPTY, EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
+      html += freeLimitRow(c);
     }
     return html;
+  }
+  // Свободный лимит рамочного договора: лимит минус спецификации и заявки (для нерамочных не считается)
+  function freeLimitRow(c) {
+    const free = contractLimitRemainder(c);
+    if (free == null) return '';
+    return treeRow('row-spec', [EMPTY, EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
   }
   function freePaymentsRows(list, key) {
     if (!list.length) return '';
@@ -2088,6 +2093,7 @@
       });
       if (isOpen(inc.id) || (filtering && !incMatch)) {
         childrenOf(inc.id).forEach(k => { rows += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
+        if (childrenOf(inc.id).length) rows += freeLimitRow(inc);
         visibleFunded.forEach(c => { rows += contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true}); });
         rows += freePaymentsRows(free, 'free-' + inc.id);
       }
