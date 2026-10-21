@@ -2117,9 +2117,9 @@ def sheet_addendums(wb, contracts, addendums):
         items = by_contract.get(contract["id"])
         if not items:
             continue
-        # действующее — последнее добавленное; в листе ДС идут по возрастанию номера
+        # действующее — последнее добавленное; в листе ДС идут от крайнего к первому (3, 2, 1)
         current = latest_addendum(items)
-        items.sort(key=lambda item: natural_key(item.get("number")))
+        items.sort(key=lambda item: natural_key(item.get("number")), reverse=True)
         write_excel_row(ws, [
             "", f"Договор № {contract['number']}", excel_date(contract.get("registrationDate") or contract.get("date")),
             excel_date(contract.get("baseEndDate")),

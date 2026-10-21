@@ -644,37 +644,43 @@
   /* ---------- модель ---------- */
   function contractById(id) { return state.contracts.find(c => c.id === id); }
   function childrenOf(contractId) { return state.contracts.filter(c => c.parentContractId === contractId); }
-  /* ---------- дубли карты документа (по договорам и платежам вместе; доп. соглашения не участвуют —
-     у них совпадение карты с договором закономерно) ---------- */
+  /* ---------- дубли карты документа (по договорам и платежам вместе). Не участвуют доп. соглашения и заявки —
+     у них совпадение карты с договором закономерно ---------- */
   let duplicateCards = new Set();
   function cardKey(value) { return String(value || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+  function isRequest(item) { return item?.category === 'request' || item?.subtype === 'request'; }
+  function cardCheckedItems() { return [...state.contracts, ...state.payments].filter(item => !isRequest(item)); }
   function refreshDuplicateCards() {
     const seen = new Map();
-    [...state.contracts, ...state.payments].forEach(item => {
+    cardCheckedItems().forEach(item => {
       const key = cardKey(item.documentCard);
       if (key) seen.set(key, (seen.get(key) || 0) + 1);
     });
     duplicateCards = new Set([...seen].filter(([, n]) => n > 1).map(([key]) => key));
   }
-  function isDuplicateCard(item) { return duplicateCards.has(cardKey(item?.documentCard)); }
+  function isDuplicateCard(item) { return !isRequest(item) && duplicateCards.has(cardKey(item?.documentCard)); }
   function dupClass(item) { return isDuplicateCard(item) ? 'dup-card' : ''; }
   function dupTitle(item) { return isDuplicateCard(item) ? ' title="Карта документа уже используется в другой записи"' : ''; }
   function cardUsedElsewhere(value, selfId) {
     const key = cardKey(value);
     if (!key) return false;
-    return [...state.contracts, ...state.payments].some(item => item.id !== selfId && cardKey(item.documentCard) === key);
+    return cardCheckedItems().some(item => item.id !== selfId && cardKey(item.documentCard) === key);
   }
-  // Подсветка строки редактирования прямо во время ввода карты документа (кроме доп. соглашений)
+  // Подсветка строки редактирования прямо во время ввода карты документа (кроме доп. соглашений и заявок)
   function markEditDuplicate(row) {
     const input = row?.querySelector('[name=documentCard]');
     if (!input || editing?.type === 'addendum') return;
+    const editingRequest = row.querySelector('[name=category]')?.value === 'request' || row.querySelector('[name=subtype]')?.value === 'request';
     const selfId = editing && !editing.isNew ? editing.id : '';
-    const dup = cardUsedElsewhere(input.value, selfId);
+    const dup = !editingRequest && cardUsedElsewhere(input.value, selfId);
     row.classList.toggle('dup-card', dup);
     input.title = dup ? 'Карта документа уже используется в другой записи' : '';
   }
   document.addEventListener('input', event => {
     if (event.target?.name === 'documentCard') markEditDuplicate(event.target.closest('tr.edit-row'));
+  });
+  document.addEventListener('change', event => {
+    if (event.target?.name === 'category' || event.target?.name === 'subtype') markEditDuplicate(event.target.closest('tr.edit-row'));
   });
   function isTop(c) { return !c.parentContractId; }
   function contractLabel(c, withCounterparty = false) {
@@ -1813,14 +1819,14 @@
         const open = expandedAddendumContracts.has(c.id) || filtering || items.some(isEditing) || (isNew && editItem.contractId === c.id);
         let html = groupRow(c, items, open, current);
         if (!open) return html;
-        // ДС по возрастанию номера (1, 2, 3 …); действующее — последнее добавленное, с бейджем
-        [...items].sort(compareByNumber).forEach(a => {
+        // новое ДС станет крайним — сразу под договором
+        if (isNew && editItem.contractId === c.id) html += addendumEditRow(editItem);
+        // от крайнего ДС к первому сверху вниз (3, 2, 1); действующее — последнее добавленное, с бейджем
+        [...items].sort((a, b) => compareByNumber(b, a)).forEach(a => {
           if (isEditing(a)) { html += addendumEditRow(a); return; }
           if (filtering && !matched.includes(a)) return;
           html += itemRow(a, c, a === current);
         });
-        // новое ДС — в конце группы
-        if (isNew && editItem.contractId === c.id) html += addendumEditRow(editItem);
         return html;
       }).join('')}`;
     const host = document.getElementById('addendums-table');
