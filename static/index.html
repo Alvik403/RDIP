@@ -631,12 +631,13 @@
   /* ---------- модель ---------- */
   function contractById(id) { return state.contracts.find(c => c.id === id); }
   function childrenOf(contractId) { return state.contracts.filter(c => c.parentContractId === contractId); }
-  /* ---------- дубли карты документа (по договорам и платежам вместе) ---------- */
+  /* ---------- дубли карты документа (по договорам и платежам вместе; доп. соглашения не участвуют —
+     у них совпадение карты с договором закономерно) ---------- */
   let duplicateCards = new Set();
   function cardKey(value) { return String(value || '').trim().toLowerCase().replace(/\s+/g, ' '); }
   function refreshDuplicateCards() {
     const seen = new Map();
-    [...state.contracts, ...state.payments, ...(state.addendums || [])].forEach(item => {
+    [...state.contracts, ...state.payments].forEach(item => {
       const key = cardKey(item.documentCard);
       if (key) seen.set(key, (seen.get(key) || 0) + 1);
     });
@@ -648,12 +649,12 @@
   function cardUsedElsewhere(value, selfId) {
     const key = cardKey(value);
     if (!key) return false;
-    return [...state.contracts, ...state.payments, ...(state.addendums || [])].some(item => item.id !== selfId && cardKey(item.documentCard) === key);
+    return [...state.contracts, ...state.payments].some(item => item.id !== selfId && cardKey(item.documentCard) === key);
   }
-  // Подсветка строки редактирования прямо во время ввода карты документа
+  // Подсветка строки редактирования прямо во время ввода карты документа (кроме доп. соглашений)
   function markEditDuplicate(row) {
     const input = row?.querySelector('[name=documentCard]');
-    if (!input) return;
+    if (!input || editing?.type === 'addendum') return;
     const selfId = editing && !editing.isNew ? editing.id : '';
     const dup = cardUsedElsewhere(input.value, selfId);
     row.classList.toggle('dup-card', dup);
@@ -1725,7 +1726,6 @@
   }
   function renderAddendums() {
     comboHideMenu();
-    refreshDuplicateCards();
     const all = state.addendums || [];
     const filtering = activeFilters.addendum.length > 0;
     const matched = all.filter(a => rowMatches(a, activeFilters.addendum, addendumField));
@@ -1745,9 +1745,9 @@
     const groups = state.contracts.filter(c => ids.has(c.id)).sort((a, b) => String(a.number).localeCompare(String(b.number), 'ru'));
     const groupRow = (c, items, open, current) => {
       const title = `Исходная сумма ${money(c.baseAmount)}; действующая по ДС № ${current?.number || '—'}: ${money(c.amount)}`;
-      return `<tr class="row-group ${dupClass(c)}" data-contract-id="${esc(c.id)}">
+      return `<tr class="row-group" data-contract-id="${esc(c.id)}">
           <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleAddendumExpand('${c.id}')" title="Доп. соглашения к договору"><span class="chev">▸</span><span class="count">${items.length}</span></button></td>
-          <td${dupTitle(c)}>${cellText(c.documentCard)}</td>
+          <td>${cellText(c.documentCard)}</td>
           <td><div class="main-cell" title="${esc(c.number)}">Договор № ${esc(c.number)}</div></td>
           <td>${showDate(c.registrationDate || c.date)}</td>
           <td title="Исходный срок окончания договора">${showDate(c.baseEndDate ?? c.endDate)}</td>
@@ -1761,9 +1761,9 @@
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Добавить доп. соглашение к этому договору" onclick="startAddendumRow('', '', '${c.id}')">＋</button></div>` : ''}</td>
         </tr>`;
     };
-    const itemRow = (a, c, current) => `<tr data-id="${esc(a.id)}" class="row-child ${dupClass(a)}">
+    const itemRow = (a, c, current) => `<tr data-id="${esc(a.id)}" class="row-child">
           <td class="expand-col"></td>
-          <td data-field="documentCard"${dupTitle(a)}>${cellText(a.documentCard)}</td>
+          <td data-field="documentCard">${cellText(a.documentCard)}</td>
           <td data-field="number"><div class="main-cell" title="${esc(`ДС № ${a.number} к договору № ${c?.number || ''}`)}">↳ ДС № ${esc(a.number)}${current ? ' <span class="badge green">действует</span>' : ''}</div></td>
           <td data-field="approvalDate">${showDate(a.approvalDate)}</td>
           <td data-field="endDate">${showDate(a.endDate)}</td>
@@ -1802,8 +1802,7 @@
     applyAddendumFieldRules();
   }
   function applyAddendumFieldRules() {
-    const row = document.getElementById('addendum-edit-row');
-    if (row) markEditDuplicate(row);
+    // подсветка дублей карты документа на доп. соглашениях не применяется
   }
   // При выборе договора связанные поля (сумма, срок, НДС, % аванса) заполняются действующими условиями договора
   function autofillAddendum() {
