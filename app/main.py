@@ -459,11 +459,16 @@ def load_dictionary(conn, entity_id: str):
 DICTIONARY_LABELS = {"cfo": "ЦФО", "bdds": "Статья БДДС", "project": "Проект"}
 
 
+def addendum_order_key(item):
+    """Порядок ДС — по времени добавления: крайнее добавленное считается действующим."""
+    return text(item.get("createdAt"))
+
+
 def latest_addendum(items):
-    """Действующее доп. соглашение — последнее по дате согласования, при равенстве — созданное позже."""
+    """Действующее доп. соглашение — последнее добавленное."""
     if not items:
         return None
-    return max(items, key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))))
+    return max(items, key=addendum_order_key)
 
 
 def apply_addendums(contracts, addendums):
@@ -489,7 +494,7 @@ def apply_addendums(contracts, addendums):
         contract["vatRate"] = float(rate)
         contract["amountWithoutVat"] = float(without_vat(amount, rate))
         # % авансирования берётся из последнего ДС, где он указан; если нигде не указан — из договора
-        ordered = sorted(items, key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))))
+        ordered = sorted(items, key=addendum_order_key)
         for item in reversed(ordered):
             if item.get("advancePercent") is not None:
                 contract["advancePercent"] = item["advancePercent"]
@@ -536,7 +541,7 @@ def fetch_all(conn):
     contracts = [contract_from_row(row) for row in conn.execute("SELECT * FROM contracts ORDER BY number")]
     specs = [spec_from_row(row) for row in conn.execute("SELECT * FROM specifications ORDER BY number")]
     payments = [payment_from_row(row) for row in conn.execute("SELECT * FROM payments ORDER BY date DESC")]
-    addendums = [addendum_from_row(row) for row in conn.execute("SELECT * FROM addendums ORDER BY approval_date DESC, created_at DESC")]
+    addendums = [addendum_from_row(row) for row in conn.execute("SELECT * FROM addendums ORDER BY created_at DESC")]
     contracts, specs, payments = decorate(contracts, specs, payments, addendums)
     return contracts, specs, payments, addendums
 
@@ -2034,7 +2039,7 @@ def sheet_addendums(wb, contracts, addendums):
         if not items:
             continue
         # действующее доп. соглашение — первым, затем более ранние
-        items.sort(key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))), reverse=True)
+        items.sort(key=addendum_order_key, reverse=True)
         current = items[0]
         write_excel_row(ws, [
             "", f"Договор № {contract['number']}", excel_date(contract.get("registrationDate") or contract.get("date")),

@@ -714,7 +714,7 @@
   /* ---------- доп. соглашения ---------- */
   function addendumsForContract(contractId) {
     return (state.addendums || []).filter(a => a.contractId === contractId)
-      .sort((a, b) => String(a.approvalDate || '').localeCompare(String(b.approvalDate || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))); // по времени добавления: крайнее — действующее
   }
   function addendumContractOptions() {
     return state.contracts.filter(c => isTop(c) && c.documentKind === 'contract')
