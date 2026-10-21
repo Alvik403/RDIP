@@ -1881,12 +1881,12 @@
       <td><input name="documentCard" required value="${esc(a.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(a.number)}" placeholder="№ ДС" autocomplete="off"></td>
       <td><input name="approvalDate" type="date" required value="${esc(a.approvalDate || '')}" title="Дата согласования"></td>
-      <td><input name="endDate" type="date" required value="${esc(a.endDate || '')}" title="Новый срок окончания договора по этому ДС"></td>
+      <td><input name="endDate" type="date" value="${esc(a.endDate || '')}" title="Новый срок окончания договора по этому ДС (необязательно)"></td>
       <td><input id="addendum-counterparty" value="${esc(c?.counterparty || '')}" placeholder="Из договора" disabled title="Подтягивается из выбранного договора"></td>
       <td>${comboField('contractId', addendumContractOptions(), a.contractId || '', {placeholder: 'Договор: номер или контрагент', required: true, commit: 'autofillAddendum'})}</td>
       <td><input name="amount" inputmode="decimal" required value="${a.amount ?? ''}" placeholder="0" autocomplete="off"></td>
       <td><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(a.vatRate ?? DEFAULT_VAT)===v?'selected':''}>${v ? v + '%' : '—'}</option>`).join('')}</select></td>
-      <td><input name="advancePercent" inputmode="decimal" required value="${a.advancePercent ?? ''}" placeholder="%" autocomplete="off"></td>
+      <td><input name="advancePercent" inputmode="decimal" value="${a.advancePercent ?? ''}" placeholder="%" autocomplete="off"></td>
       <td><input name="responsible" required value="${esc(a.responsible)}" placeholder="ФИО"></td>
       <td><input name="comment" required value="${esc(a.comment)}" placeholder="Комментарий"></td>
       <td class="actions-col"><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="saveAddendumRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>

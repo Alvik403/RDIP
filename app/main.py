@@ -685,7 +685,8 @@ def normalize_addendum(payload: dict, existing: dict | None) -> dict:
     number = text(payload.get("number")).strip()
     if not number:
         raise HTTPException(400, "Укажите номер доп. соглашения")
-    # В доп. соглашении обязательны все поля
+    # Обязательны: карта, номер, дата согласования, договор, сумма, ответственный, комментарий.
+    # Срок окончания и % авансирования — по желанию (пусто = условия договора не меняются)
     document_card = text(payload.get("documentCard")).strip()
     if not document_card:
         raise HTTPException(400, "Укажите карту документа доп. соглашения")
@@ -697,13 +698,12 @@ def normalize_addendum(payload: dict, existing: dict | None) -> dict:
     amount = money(payload.get("amount"))
     rate = money(payload.get("vatRate"))
     end_date = text(payload.get("endDate")).strip()[:10]
-    try:
-        datetime.strptime(end_date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(400, "Укажите срок окончания по доп. соглашению (дата)")
+    if end_date:
+        try:
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "Срок окончания по доп. соглашению должен быть датой")
     advance_percent = optional_percent(payload.get("advancePercent"))
-    if advance_percent is None:
-        raise HTTPException(400, "Укажите % авансирования по доп. соглашению")
     responsible = text(payload.get("responsible")).strip()
     if not responsible:
         raise HTTPException(400, "Укажите ответственного по доп. соглашению")
