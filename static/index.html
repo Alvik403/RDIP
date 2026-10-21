@@ -202,6 +202,7 @@
     .expand-btn.group:hover, .expand-btn.group.open { color: #6b4400; border-color: #d9a52c; background: #ffe9c2; }
     .pay-group-label { display: inline-flex; align-items: center; gap: 6px; }
     .pay-group-label .badge { font-size: 10px; padding: 2px 6px; }
+    .data-table tr.edit-row td .muted { color: var(--muted, #6b7280); font-size: 12px; white-space: normal; line-height: 1.3; }
     /* лист «Доп. соглашения»: договор-группа и строки допников под ним */
     .data-table tr.row-group > td { background: #eef8f3; font-weight: 650; }
     .data-table tr.row-group td.actions-col { background: #eef8f3; }
@@ -506,7 +507,7 @@
       {id:'contractNumber', label:'Номер договора'},
       {id:'counterparty', label:'Контрагент'},
       {id:'approvalDate', label:'Дата согласования', type:'date'},
-      {id:'termChange', label:'Изменение сроков'},
+      {id:'endDate', label:'Изменение сроков', type:'date'},
       {id:'responsible', label:'ФИО ответственного'},
       {id:'comment', label:'Комментарий'}
     ],
@@ -1733,8 +1734,9 @@
     if (editing?.type === 'addendum') {
       if (isNew) {
         const c = contractById(editing.contractId || '');
-        editItem = {id: 'new', contractId: c?.id || '', vatRate: DEFAULT_VAT, number: '', documentCard: '', approvalDate: '', termChange: '', responsible: '', comment: ''};
-        if (c) Object.assign(editItem, {amount: c.amount, vatRate: c.vatRate, advancePercent: c.advancePercent, responsible: c.responsible || ''});
+        editItem = {id: 'new', contractId: c?.id || '', vatRate: DEFAULT_VAT, number: '', documentCard: '', approvalDate: '', endDate: '', responsible: '', comment: ''};
+        // предзаполняем действующими условиями договора (с учётом уже внесённых ДС)
+        if (c) Object.assign(editItem, {amount: c.amount, vatRate: c.vatRate, advancePercent: c.advancePercent, endDate: c.endDate || '', responsible: c.responsible || ''});
       } else editItem = all.find(a => a.id === editing.id) || null;
     }
     const isEditing = a => editItem && !isNew && a.id === editing.id;
@@ -1748,7 +1750,7 @@
           <td${dupTitle(c)}>${cellText(c.documentCard)}</td>
           <td><div class="main-cell" title="${esc(c.number)}">Договор № ${esc(c.number)}</div></td>
           <td>${showDate(c.registrationDate || c.date)}</td>
-          <td>${cellText(c.endDate ? `до ${showDate(c.endDate)}` : '')}</td>
+          <td title="Исходный срок окончания договора">${showDate(c.baseEndDate ?? c.endDate)}</td>
           <td><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
           <td>${cellText(c.number)}</td>
           <td class="money cell-number" title="${esc(title)}">${money(c.baseAmount)}</td>
@@ -1764,7 +1766,7 @@
           <td data-field="documentCard"${dupTitle(a)}>${cellText(a.documentCard)}</td>
           <td data-field="number"><div class="main-cell" title="${esc(`ДС № ${a.number} к договору № ${c?.number || ''}`)}">↳ ДС № ${esc(a.number)}${current ? ' <span class="badge green">действует</span>' : ''}</div></td>
           <td data-field="approvalDate">${showDate(a.approvalDate)}</td>
-          <td data-field="termChange">${cellText(a.termChange)}</td>
+          <td data-field="endDate">${showDate(a.endDate)}</td>
           <td><div class="main-cell" title="${esc(c?.counterparty || '')}">${esc(c?.counterparty || '—')}</div></td>
           <td data-field="contractId">${cellText(c?.number)}</td>
           ${moneyCell(a.amount, '', 'amount')}
@@ -1774,15 +1776,18 @@
           <td data-field="comment">${cellText(a.comment)}</td>
           <td class="actions-col">${canEdit() ? `<div class="row-actions"><button class="icon-btn" title="Изменить" onclick="startAddendumRow('${a.id}')">✎</button><button class="icon-btn delete" title="Удалить" onclick="removeAddendum('${a.id}')">⌫</button></div>` : ''}</td>
         </tr>`;
+    // Новое ДС без договора — сверху только поле выбора договора; после выбора строка переезжает под договор
     const newRowAtTop = isNew && !editItem.contractId;
-    const body = `${newRowAtTop ? addendumEditRow(editItem) : ''}${groups.map(c => {
+    const body = `${newRowAtTop ? addendumPickRow(editItem) : ''}${groups.map(c => {
         const items = addendumsForContract(c.id);
         const current = items[items.length - 1] || null;
         const open = expandedAddendumContracts.has(c.id) || filtering || items.some(isEditing) || (isNew && editItem.contractId === c.id);
         let html = groupRow(c, items, open, current);
         if (!open) return html;
+        // новое ДС станет действующим — показываем его сразу под договором
         if (isNew && editItem.contractId === c.id) html += addendumEditRow(editItem);
-        items.forEach(a => {
+        // действующее ДС первым, старые ниже
+        [...items].reverse().forEach(a => {
           if (isEditing(a)) { html += addendumEditRow(a); return; }
           if (filtering && !matched.includes(a)) return;
           html += itemRow(a, c, a === current);
@@ -1800,19 +1805,40 @@
     const row = document.getElementById('addendum-edit-row');
     if (row) markEditDuplicate(row);
   }
-  // При выборе договора данные подтягиваются из него и предлагаются для редактирования
+  // При выборе договора связанные поля (сумма, срок, НДС, % аванса) заполняются действующими условиями договора
   function autofillAddendum() {
     const row = document.getElementById('addendum-edit-row');
     if (!row) return;
     const c = contractById(row.querySelector('[name=contractId]').value);
-    row.querySelector('#addendum-counterparty').value = c?.counterparty || '';
+    if (editing?.type === 'addendum' && editing.isNew && !editing.contractId) {
+      // шаг 1 → шаг 2: договор выбран, строка перерисовывается под ним с полным набором полей
+      if (!c) return;
+      editing.contractId = c.id;
+      expandedAddendumContracts.add(c.id);
+      renderAddendums();
+      focusEditField('addendum-edit-row', 'number');
+      return;
+    }
+    const counterparty = row.querySelector('#addendum-counterparty');
+    if (counterparty) counterparty.value = c?.counterparty || '';
     if (!c) return;
     row.querySelector('[name=amount]').value = c.amount ?? '';
+    row.querySelector('[name=endDate]').value = c.endDate || '';
     const vat = row.querySelector('[name=vatRate]');
     if (VAT_RATES.includes(Number(c.vatRate))) vat.value = String(Number(c.vatRate));
     row.querySelector('[name=advancePercent]').value = c.advancePercent ?? '';
     const responsible = row.querySelector('[name=responsible]');
     if (!responsible.value) responsible.value = c.responsible || '';
+  }
+  // Шаг 1 добавления: только выбор договора, остальные поля появятся после выбора
+  function addendumPickRow(a) {
+    return `<tr class="edit-row" id="addendum-edit-row">
+      <td class="expand-col"></td>
+      <td colspan="5"><span class="muted">Сначала выберите договор — сумма, срок, НДС и % авансирования подтянутся из его действующих условий</span></td>
+      <td>${comboField('contractId', addendumContractOptions(), a.contractId || '', {placeholder: 'Договор: номер или контрагент', required: true, commit: 'autofillAddendum'})}</td>
+      <td colspan="5"></td>
+      <td class="actions-col"><div class="row-actions"><button class="icon-btn" title="Сначала выберите договор" disabled>✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
+    </tr>`;
   }
   function addendumEditRow(a) {
     const c = contractById(a.contractId);
@@ -1821,7 +1847,7 @@
       <td><input name="documentCard" value="${esc(a.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(a.number)}" placeholder="№ ДС" autocomplete="off"></td>
       <td><input name="approvalDate" type="date" value="${esc(a.approvalDate || '')}" title="Дата согласования"></td>
-      <td><input name="termChange" value="${esc(a.termChange)}" placeholder="Напр.: срок до 31.12.2026" title="Изменение сроков"></td>
+      <td><input name="endDate" type="date" value="${esc(a.endDate || '')}" title="Новый срок окончания договора по этому ДС"></td>
       <td><input id="addendum-counterparty" value="${esc(c?.counterparty || '')}" placeholder="Из договора" disabled title="Подтягивается из выбранного договора"></td>
       <td>${comboField('contractId', addendumContractOptions(), a.contractId || '', {placeholder: 'Договор: номер или контрагент', required: true, commit: 'autofillAddendum'})}</td>
       <td><input name="amount" inputmode="decimal" required value="${a.amount ?? ''}" placeholder="0" autocomplete="off"></td>
@@ -2266,7 +2292,8 @@
       entity.documentKind = entity.documentKind || 'contract';
       entity.category = entity.category || 'limit';
       entity.startDate = existing?.startDate || '';
-      entity.endDate = existing?.endDate || '';
+      // срок договора в реестре может быть изменён доп. соглашением — сохраняем исходный
+      entity.endDate = existing?.baseEndDate ?? existing?.endDate ?? '';
       try { await persistRow('/api/contracts', entity, existing, 'Изменения сохранены'); }
       catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
     } finally { rowSaving = false; }

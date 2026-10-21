@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS addendums (
   created_at timestamptz NOT NULL DEFAULT now(),
   version integer NOT NULL DEFAULT 1
 );
+ALTER TABLE addendums ADD COLUMN IF NOT EXISTS end_date text NOT NULL DEFAULT '';
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS parent_contract_id text NOT NULL DEFAULT '';
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS funding_contract_id text NOT NULL DEFAULT '';
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS advance_percent numeric(6,2);
@@ -383,7 +384,7 @@ def addendum_from_row(row) -> dict:
         "number": row["number"],
         "documentCard": row["document_card"],
         "approvalDate": row["approval_date"],
-        "termChange": row["term_change"],
+        "endDate": row["end_date"],
         "amount": json_money(row["amount"]),
         "vatRate": json_money(row["vat_rate"]),
         "advancePercent": None if row.get("advance_percent") is None else json_money(row["advance_percent"]),
@@ -475,6 +476,7 @@ def apply_addendums(contracts, addendums):
         contract["baseVatRate"] = contract["vatRate"]
         contract["baseAmountWithoutVat"] = contract["amountWithoutVat"]
         contract["baseAdvancePercent"] = contract["advancePercent"]
+        contract["baseEndDate"] = contract["endDate"]
         items = by_contract.get(contract["id"], [])
         contract["addendumCount"] = len(items)
         current = latest_addendum(items)
@@ -491,6 +493,11 @@ def apply_addendums(contracts, addendums):
         for item in reversed(ordered):
             if item.get("advancePercent") is not None:
                 contract["advancePercent"] = item["advancePercent"]
+                break
+        # срок окончания — из последнего ДС, где он указан; иначе остаётся срок договора
+        for item in reversed(ordered):
+            if text(item.get("endDate")).strip():
+                contract["endDate"] = item["endDate"]
                 break
 
 
@@ -669,13 +676,19 @@ def normalize_addendum(payload: dict, existing: dict | None) -> dict:
         raise HTTPException(400, "Укажите номер доп. соглашения")
     amount = money(payload.get("amount"))
     rate = money(payload.get("vatRate"))
+    end_date = text(payload.get("endDate")).strip()[:10]
+    if end_date:
+        try:
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "Срок окончания по доп. соглашению должен быть датой")
     return {
         "id": text(payload.get("id") or (existing or {}).get("id") or "addendum-" + secrets.token_hex(8)),
         "contractId": contract_id,
         "number": number,
         "documentCard": text(payload.get("documentCard")).strip(),
         "approvalDate": text(payload.get("approvalDate")).strip(),
-        "termChange": text(payload.get("termChange")).strip(),
+        "endDate": end_date,
         "amount": amount,
         "vatRate": rate,
         "advancePercent": optional_percent(payload.get("advancePercent")),
@@ -780,18 +793,18 @@ def upsert_addendum(conn, entity: dict, version: int):
     if parent["parent_contract_id"]:
         raise HTTPException(400, "Доп. соглашение оформляется к договору, а не к спецификации")
     values = (
-        entity["contractId"], entity["number"], entity["documentCard"], entity["approvalDate"], entity["termChange"],
+        entity["contractId"], entity["number"], entity["documentCard"], entity["approvalDate"], entity.get("endDate", ""),
         entity["amount"], entity["vatRate"], entity.get("advancePercent"), entity["responsible"], entity["comment"], version, entity["id"],
     )
     updated = conn.execute(
-        """UPDATE addendums SET contract_id=%s, number=%s, document_card=%s, approval_date=%s, term_change=%s,
+        """UPDATE addendums SET contract_id=%s, number=%s, document_card=%s, approval_date=%s, end_date=%s,
            amount=%s, vat_rate=%s, advance_percent=%s, responsible=%s, comment=%s, version=%s WHERE id=%s""",
         values,
     )
     if updated.rowcount == 0:
         created = entity.get("createdAt") or None
         conn.execute(
-            """INSERT INTO addendums (id, contract_id, number, document_card, approval_date, term_change, amount, vat_rate,
+            """INSERT INTO addendums (id, contract_id, number, document_card, approval_date, end_date, amount, vat_rate,
                  advance_percent, responsible, comment, version, created_at)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamptz, now()))""",
             (entity["id"], *values[:-1], created),
@@ -879,7 +892,7 @@ def migrate_addendums(conn):
                 "number": item["number"],
                 "documentCard": item["documentCard"],
                 "approvalDate": item["reviewDate"] or item["date"],
-                "termChange": "",
+                "endDate": "",
                 "amount": Decimal(str(item["amount"])),
                 "vatRate": Decimal(str(item["vatRate"])),
                 "advancePercent": item.get("advancePercent"),
@@ -891,6 +904,21 @@ def migrate_addendums(conn):
         conn.execute("UPDATE contracts SET funding_contract_id = '' WHERE funding_contract_id = %s", (item["id"],))
         conn.execute("UPDATE payments SET funding_contract_id = '' WHERE funding_contract_id = %s", (item["id"],))
         conn.execute("DELETE FROM contracts WHERE id = %s", (item["id"],))
+
+
+def migrate_addendum_terms(conn):
+    """Текстовое «Изменение сроков» переносится в дату окончания, если текст разбирается как дата."""
+    rows = conn.execute("SELECT id, term_change FROM addendums WHERE end_date = '' AND term_change <> ''").fetchall()
+    for row in rows:
+        raw = text(row["term_change"]).strip()
+        candidate = raw[:10] if re.match(r"\d{4}-\d{2}-\d{2}", raw) else raw
+        for pattern in ("%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y"):
+            try:
+                parsed = datetime.strptime(candidate, pattern).date().isoformat()
+            except ValueError:
+                continue
+            conn.execute("UPDATE addendums SET end_date = %s, term_change = '' WHERE id = %s", (parsed, row["id"]))
+            break
 
 
 def migrate_specifications(conn):
@@ -1066,6 +1094,7 @@ def prepare_database():
                 seed(conn)
                 migrate_specifications(conn)
                 migrate_addendums(conn)
+                migrate_addendum_terms(conn)
                 conn.execute("UPDATE payments SET counterparty = c.counterparty FROM contracts c WHERE payments.contract_id = c.id AND payments.counterparty = ''")
                 seed_dictionaries(conn)
             return
@@ -1976,7 +2005,7 @@ def addendum_excel_values(item, contract):
         item.get("documentCard") or "",
         item.get("number") or "",
         excel_date(item.get("approvalDate")),
-        item.get("termChange") or "",
+        excel_date(item.get("endDate")),
         contract.get("counterparty") or "",
         contract.get("number") or "",
         amount,
@@ -1995,7 +2024,7 @@ def sheet_addendums(wb, contracts, addendums):
         "Карта документа", "Номер документа", "Дата согласования", "Изменение сроков", "Контрагент", "Номер договора",
         "Сумма", "Ставка НДС", "НДС", "% авансирования", "Ответственный", "Комментарий",
     ])
-    kinds = "ttdtttmmmmtt"
+    kinds = "ttddttmmmmtt"
     by_id = {item["id"]: item for item in contracts}
     by_contract: dict[str, list] = {}
     for item in addendums:
@@ -2004,12 +2033,16 @@ def sheet_addendums(wb, contracts, addendums):
         items = by_contract.get(contract["id"])
         if not items:
             continue
-        items.sort(key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))))
+        # действующее доп. соглашение — первым, затем более ранние
+        items.sort(key=lambda item: (text(item.get("approvalDate")), text(item.get("createdAt"))), reverse=True)
+        current = items[0]
         write_excel_row(ws, [
-            "", f"Договор № {contract['number']}", excel_date(contract.get("registrationDate") or contract.get("date")), "",
+            "", f"Договор № {contract['number']}", excel_date(contract.get("registrationDate") or contract.get("date")),
+            excel_date(contract.get("baseEndDate")),
             contract.get("counterparty") or "", contract.get("number") or "",
             excel_money(contract.get("baseAmount")), excel_money(contract.get("baseVatRate")), None,
-            excel_money(contract.get("baseAdvancePercent")), contract.get("responsible") or "", "Исходные условия договора",
+            excel_money(contract.get("baseAdvancePercent")), contract.get("responsible") or "",
+            f"Исходные условия · действует ДС № {current.get('number') or '—'}",
         ], kinds, bold=True, fill=FILL_GROUP)
         start = ws.max_row + 1
         for item in items:
