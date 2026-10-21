@@ -500,8 +500,8 @@
     contract: [
       {id:'number', label:'Номер документа'},
       {id:'documentCard', label:'Карта документа'},
-      {id:'reviewDate', label:'Дата рассмотрения', type:'date'},
-      {id:'registrationDate', label:'Дата регистрации', type:'date'},
+      {id:'reviewDate', label:'Дата рассмотр/регистр.', type:'date'},
+      {id:'endDate', label:'Дата окончания действия', type:'date'},
       {id:'counterparty', label:'Контрагент'},
       {id:'subject', label:'Предмет договора'},
       {id:'fundingSource', label:'Источник финансирования'},
@@ -716,10 +716,10 @@
   function dictValues(kind) {
     return state.dictionaries.filter(d => d.kind === kind).map(d => d.value).sort((a, b) => a.localeCompare(b, 'ru'));
   }
-  function dictSelect(name, kind, current) {
+  function dictSelect(name, kind, current, required = false) {
     const values = dictValues(kind);
     const list = current && !values.includes(current) ? [current, ...values] : values;
-    return comboField(name, list.map(v => [v, v]), current || '', {placeholder: '—'});
+    return comboField(name, list.map(v => [v, v]), current || '', {placeholder: required ? 'Обязательно' : '—', required});
   }
   function paymentsForContract(contractId) {
     return state.payments.filter(p => p.contractId === contractId)
@@ -990,6 +990,7 @@
   function contractField(c, id) {
     if (id === 'reviewDate') return c.reviewDate || c.date || '';
     if (id === 'registrationDate') return c.registrationDate || c.date || '';
+    if (id === 'endDate') return c.endDate || '';
     if (id === 'fundingSource') return fundingLabel(c.fundingContractId) || c.fundingSource || '';
     if (id === 'parentNumber') return contractById(c.parentContractId)?.number || '';
     return c[id] || '';
@@ -1293,8 +1294,8 @@
     {label:'', w:44, cls:'expand-col'},
     {label:'Карта документа', w:120},
     {label:'Номер документа', w:120},
-    {label:'Рассмотр.', w:100, sort:'reviewDate'},
-    {label:'Регистр.', w:100},
+    {label:'Дата рассмотр/регистр.', w:120, sort:'reviewDate'},
+    {label:'Дата окончания действия', w:120},
     {label:'Контрагент', w:220},
     {label:'Вид', w:100},
     {label:'Предмет', w:260},
@@ -1351,11 +1352,22 @@
     const key = c => String(contractField(c, contractSort.field) || '');
     return key(a).localeCompare(key(b)) * contractSort.dir || String(a.number).localeCompare(String(b.number), 'ru');
   }
+  // Спецификации, заявки и ДС внутри договора — по возрастанию номера (1, 2, 3, … 10), независимо от порядка добавления
+  function compareByNumber(a, b) {
+    return String(a.number || '').localeCompare(String(b.number || ''), 'ru', {numeric: true});
+  }
   // Сумма договора: если есть доп. соглашения, показывается действующая сумма по последнему ДС
   function contractAmountCell(c) {
     if (!Number(c.addendumCount)) return moneyCell(c.amount, '', 'amount');
     const title = `Действует ДС № ${c.currentAddendumNumber} (исходная сумма ${money(c.baseAmount)}). Доп. соглашений: ${c.addendumCount}`;
     return `<td class="money cell-number ${Number(c.amount) < 0 ? 'neg' : ''}" data-field="amount" title="${esc(title)}">${money(c.amount)}<span class="ds-mark">ДС</span></td>`;
+  }
+  // Срок окончания договора: если изменён доп. соглашением — показывается действующий срок с пометкой
+  function contractEndDateCell(c) {
+    const base = c.baseEndDate ?? c.endDate;
+    if (!Number(c.addendumCount) || !c.endDate || c.endDate === base) return `<td data-field="endDate">${showDate(c.endDate)}</td>`;
+    const title = `Срок изменён ДС № ${c.currentAddendumNumber} (исходный срок ${showDate(base)})`;
+    return `<td data-field="endDate" title="${esc(title)}">${showDate(c.endDate)}<span class="ds-mark">ДС</span></td>`;
   }
   function renderContracts() {
     comboHideMenu();
@@ -1375,7 +1387,7 @@
           <td data-field="documentCard"${dupTitle(c)}>${cellText(c.documentCard)}</td>
           <td data-field="number"><div class="main-cell" title="${esc(parent ? `${labels[c.category] || 'Спецификация'} ${c.number} к договору № ${parent.number}` : c.number)}">${parent ? `↳ ${esc(c.number)}` : `№ ${esc(c.number)}`}</div></td>
           <td data-field="reviewDate">${showDate(c.reviewDate || c.date)}</td>
-          <td data-field="registrationDate">${showDate(c.registrationDate || c.date)}</td>
+          ${contractEndDateCell(c)}
           <td data-field="counterparty"><div class="main-cell" title="${esc(c.counterparty)}">${esc(c.counterparty || '—')}</div></td>
           <td class="cell-center" data-field="direction">${c.direction ? `<span class="badge ${c.direction === 'income' ? 'green' : 'amber'}">${labels[c.direction]}</span>` : '—'}</td>
           <td data-field="subject">${cellText(c.subject)}</td>
@@ -1399,7 +1411,7 @@
     };
     const paymentRows = contractPaymentRows;
     const body = `${editItem && editing.isNew ? contractEditRow(editItem) : ''}${rows.map(c => {
-        const kids = childrenOf(c.id).sort(compareContracts);
+        const kids = childrenOf(c.id).sort(compareByNumber);
         const editingChild = kids.some(isEditing);
         const open = expandedContracts.has(c.id) || openParents.has(c.id) || editingChild;
         let html = isEditing(c) ? contractEditRow(c) : contractRow(c, open);
@@ -1520,12 +1532,16 @@
     const amount = locked ? c.baseAmount : c.amount;
     const vatRate = locked ? c.baseVatRate : c.vatRate;
     const advance = locked ? c.baseAdvancePercent : c.advancePercent;
+    const baseEnd = c.baseEndDate ?? c.endDate ?? '';
+    const endLocked = locked && c.endDate && c.endDate !== baseEnd;
+    const endTitle = endLocked ? `Срок изменён доп. соглашением № ${c.currentAddendumNumber} (лист «Доп. соглашения»). Здесь — исходный срок договора` : 'Дата окончания действия договора';
+    const endAttr = `${endLocked ? ' disabled' : ''} title="${esc(endTitle)}"`;
     return `<tr class="edit-row" id="contract-edit-row">
       <td class="expand-col"></td>
       <td><input name="documentCard" value="${esc(c.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(c.number)}" placeholder="№" autocomplete="off"></td>
-      <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}"></td>
-      <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
+      <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}" title="Дата рассмотрения / регистрации"></td>
+      <td><input name="endDate" type="date" value="${esc(baseEnd)}"${endAttr}></td>
       <td>${suggestField('counterparty', counterpartyNames(), c.counterparty, {placeholder: 'Контрагент: новый или из списка', required: true, oninput: 'applyContractFieldRules()'})}</td>
       <td><select name="direction" onchange="applyContractFieldRules()">${optionTags([['income','Доходный'],['expense','Расходный']], c.direction || 'expense')}</select></td>
       <td><input name="subject" required value="${esc(c.subject)}" placeholder="Предмет"></td>
@@ -1706,8 +1722,8 @@
       <td><select name="documentKind" onchange="applyPaymentFieldRules()">${optionTags(PAYMENT_DOC, p.documentKind || 'contract')}</select></td>
       <td><select name="type">${optionTags(PAY_TYPES, p.type || 'expense')}</select></td>
       <td><select name="subtype">${optionTags([['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']], p.subtype || 'invoice')}</select></td>
-      <td>${dictSelect('bdds', 'bdds', p.bdds || '')}</td>
-      <td>${dictSelect('cfo', 'cfo', p.cfo || '')}</td>
+      <td>${dictSelect('bdds', 'bdds', p.bdds || '', true)}</td>
+      <td>${dictSelect('cfo', 'cfo', p.cfo || '', true)}</td>
       <td><select name="paymentKind">${optionTags([['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']], kind)}</select></td>
       <td>${comboField('fundingContractId', fundingOptions(), p.fundingContractId || '', {placeholder: 'Источник'})}</td>
       <td><input name="responsible" value="${esc(p.responsible)}" placeholder="ФИО"></td>
@@ -1797,14 +1813,14 @@
         const open = expandedAddendumContracts.has(c.id) || filtering || items.some(isEditing) || (isNew && editItem.contractId === c.id);
         let html = groupRow(c, items, open, current);
         if (!open) return html;
-        // новое ДС станет действующим — показываем его сразу под договором
-        if (isNew && editItem.contractId === c.id) html += addendumEditRow(editItem);
-        // действующее ДС первым, старые ниже
-        [...items].reverse().forEach(a => {
+        // ДС по возрастанию номера (1, 2, 3 …); действующее — последнее добавленное, с бейджем
+        [...items].sort(compareByNumber).forEach(a => {
           if (isEditing(a)) { html += addendumEditRow(a); return; }
           if (filtering && !matched.includes(a)) return;
           html += itemRow(a, c, a === current);
         });
+        // новое ДС — в конце группы
+        if (isNew && editItem.contractId === c.id) html += addendumEditRow(editItem);
         return html;
       }).join('')}`;
     const host = document.getElementById('addendums-table');
@@ -1856,17 +1872,17 @@
     const c = contractById(a.contractId);
     return `<tr class="edit-row" id="addendum-edit-row">
       <td class="expand-col"></td>
-      <td><input name="documentCard" value="${esc(a.documentCard)}" placeholder="Карта" autocomplete="off"></td>
+      <td><input name="documentCard" required value="${esc(a.documentCard)}" placeholder="Карта" autocomplete="off"></td>
       <td><input name="number" required value="${esc(a.number)}" placeholder="№ ДС" autocomplete="off"></td>
-      <td><input name="approvalDate" type="date" value="${esc(a.approvalDate || '')}" title="Дата согласования"></td>
-      <td><input name="endDate" type="date" value="${esc(a.endDate || '')}" title="Новый срок окончания договора по этому ДС"></td>
+      <td><input name="approvalDate" type="date" required value="${esc(a.approvalDate || '')}" title="Дата согласования"></td>
+      <td><input name="endDate" type="date" required value="${esc(a.endDate || '')}" title="Новый срок окончания договора по этому ДС"></td>
       <td><input id="addendum-counterparty" value="${esc(c?.counterparty || '')}" placeholder="Из договора" disabled title="Подтягивается из выбранного договора"></td>
       <td>${comboField('contractId', addendumContractOptions(), a.contractId || '', {placeholder: 'Договор: номер или контрагент', required: true, commit: 'autofillAddendum'})}</td>
       <td><input name="amount" inputmode="decimal" required value="${a.amount ?? ''}" placeholder="0" autocomplete="off"></td>
       <td><select name="vatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(a.vatRate ?? DEFAULT_VAT)===v?'selected':''}>${v ? v + '%' : '—'}</option>`).join('')}</select></td>
-      <td><input name="advancePercent" inputmode="decimal" value="${a.advancePercent ?? ''}" placeholder="%" autocomplete="off"></td>
-      <td><input name="responsible" value="${esc(a.responsible)}" placeholder="ФИО"></td>
-      <td><input name="comment" value="${esc(a.comment)}" placeholder="Комментарий"></td>
+      <td><input name="advancePercent" inputmode="decimal" required value="${a.advancePercent ?? ''}" placeholder="%" autocomplete="off"></td>
+      <td><input name="responsible" required value="${esc(a.responsible)}" placeholder="ФИО"></td>
+      <td><input name="comment" required value="${esc(a.comment)}" placeholder="Комментарий"></td>
       <td class="actions-col"><div class="row-actions"><button class="icon-btn" title="Сохранить" onclick="saveAddendumRow()">✓</button><button class="icon-btn delete" title="Отмена" onclick="cancelRowEdit()">✕</button></div></td>
     </tr>`;
   }
@@ -2300,12 +2316,13 @@
       entity.documentCard = String(entity.documentCard || '').trim();
       entity.date = entity.reviewDate || entity.date;
       entity.reviewDate = entity.reviewDate || entity.date;
-      entity.registrationDate = entity.registrationDate || entity.date;
+      // дата регистрации = дате рассмотрения (единый столбец «Дата рассмотр/регистр.»)
+      entity.registrationDate = entity.reviewDate;
       entity.documentKind = entity.documentKind || 'contract';
       entity.category = entity.category || 'limit';
       entity.startDate = existing?.startDate || '';
-      // срок договора в реестре может быть изменён доп. соглашением — сохраняем исходный
-      entity.endDate = existing?.baseEndDate ?? existing?.endDate ?? '';
+      // в форме — исходный срок договора (если срок изменён ДС, поле заблокировано и содержит исходное значение)
+      entity.endDate = String(values.endDate || '');
       try { await persistRow('/api/contracts', entity, existing, 'Изменения сохранены'); }
       catch (error) { if (!quiet(error)) toast('Не удалось сохранить строку'); }
     } finally { rowSaving = false; }

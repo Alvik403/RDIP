@@ -557,6 +557,8 @@ def normalize_contract(payload: dict, existing: dict | None) -> dict:
     parent_id = text(payload.get("parentContractId")).strip()
     if category == "addendum":
         raise HTTPException(400, "Доп. соглашения ведутся на отдельном листе «Доп. соглашения»")
+    if not text(payload.get("subject")).strip():
+        raise HTTPException(400, "Укажите предмет договора")
     if category == "limit":
         parent_id = ""
     elif not parent_id:
@@ -636,6 +638,10 @@ def normalize_payment(payload: dict, existing: dict | None) -> dict:
         raise HTTPException(400, "Для счета по договору выберите договор")
     if document_kind != "contract":
         contract_id = ""
+    if not text(payload.get("bdds")).strip():
+        raise HTTPException(400, "Укажите статью БДДС")
+    if not text(payload.get("cfo")).strip():
+        raise HTTPException(400, "Укажите ЦФО")
     return {
         "id": text(payload.get("id") or (existing or {}).get("id") or "payment-" + secrets.token_hex(8)),
         "contractId": contract_id,
@@ -679,26 +685,43 @@ def normalize_addendum(payload: dict, existing: dict | None) -> dict:
     number = text(payload.get("number")).strip()
     if not number:
         raise HTTPException(400, "Укажите номер доп. соглашения")
+    # В доп. соглашении обязательны все поля
+    document_card = text(payload.get("documentCard")).strip()
+    if not document_card:
+        raise HTTPException(400, "Укажите карту документа доп. соглашения")
+    approval_date = text(payload.get("approvalDate")).strip()[:10]
+    try:
+        datetime.strptime(approval_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, "Укажите дату согласования доп. соглашения")
     amount = money(payload.get("amount"))
     rate = money(payload.get("vatRate"))
     end_date = text(payload.get("endDate")).strip()[:10]
-    if end_date:
-        try:
-            datetime.strptime(end_date, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(400, "Срок окончания по доп. соглашению должен быть датой")
+    try:
+        datetime.strptime(end_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, "Укажите срок окончания по доп. соглашению (дата)")
+    advance_percent = optional_percent(payload.get("advancePercent"))
+    if advance_percent is None:
+        raise HTTPException(400, "Укажите % авансирования по доп. соглашению")
+    responsible = text(payload.get("responsible")).strip()
+    if not responsible:
+        raise HTTPException(400, "Укажите ответственного по доп. соглашению")
+    comment = text(payload.get("comment")).strip()
+    if not comment:
+        raise HTTPException(400, "Укажите комментарий к доп. соглашению")
     return {
         "id": text(payload.get("id") or (existing or {}).get("id") or "addendum-" + secrets.token_hex(8)),
         "contractId": contract_id,
         "number": number,
-        "documentCard": text(payload.get("documentCard")).strip(),
-        "approvalDate": text(payload.get("approvalDate")).strip(),
+        "documentCard": document_card,
+        "approvalDate": approval_date,
         "endDate": end_date,
         "amount": amount,
         "vatRate": rate,
-        "advancePercent": optional_percent(payload.get("advancePercent")),
-        "responsible": text(payload.get("responsible")),
-        "comment": text(payload.get("comment")),
+        "advancePercent": advance_percent,
+        "responsible": responsible,
+        "comment": comment,
         "createdAt": text((existing or {}).get("createdAt") or payload.get("createdAt") or ""),
         "version": int((existing or {}).get("version") or 1),
     }
@@ -1979,6 +2002,11 @@ def group_excel_rows(ws, start, end, level=1):
         ws.row_dimensions.group(start, end, hidden=False, outline_level=level)
 
 
+def natural_key(value):
+    """Ключ сортировки номеров «по-человечески»: 2 раньше 10, «ДС-2» раньше «ДС-10»."""
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", text(value))]
+
+
 def rows_by_parent(contracts):
     ids = {item["id"] for item in contracts}
     children = {}
@@ -1987,7 +2015,7 @@ def rows_by_parent(contracts):
         if parent in ids:
             children.setdefault(parent, []).append(item)
     for items in children.values():
-        items.sort(key=lambda item: text(item.get("number")))
+        items.sort(key=lambda item: natural_key(item.get("number")))
     tops = [item for item in contracts if (item.get("parentContractId") or "") not in ids]
     tops.sort(key=lambda item: text(item.get("number")))
     return ids, children, tops
@@ -2006,7 +2034,7 @@ def contract_excel_values(contract, by_id):
         contract.get("documentCard") or "",
         number,
         excel_date(contract.get("reviewDate") or contract.get("date")),
-        excel_date(contract.get("registrationDate") or contract.get("date")),
+        excel_date(contract.get("endDate")),
         contract.get("counterparty") or "",
         display_choice(contract.get("direction") or "", DIRECTION_LABELS),
         contract.get("subject") or "",
@@ -2033,7 +2061,7 @@ def sheet_contracts(wb, contracts):
     ws = wb.active
     ws.title = "Договоры"
     headers = [
-        "Карта документа", "Номер документа", "Дата рассмотрения", "Дата регистрации", "Контрагент", "Вид", "Предмет",
+        "Карта документа", "Номер документа", "Дата рассмотр/регистр.", "Дата окончания действия", "Контрагент", "Вид", "Предмет",
         "Сумма с НДС", "Ставка НДС", "Без НДС", "НДС", "Источник финансирования", "Проект", "Ответственный",
         "Вид документа", "Подвид", "Категория", "Договор-основание", "Прочие расходы", "Остаток лимита", "Остаток оплат", "% авансирования по условиям договора", "Комментарий",
     ]
@@ -2089,9 +2117,9 @@ def sheet_addendums(wb, contracts, addendums):
         items = by_contract.get(contract["id"])
         if not items:
             continue
-        # действующее доп. соглашение — первым, затем более ранние
-        items.sort(key=addendum_order_key, reverse=True)
-        current = items[0]
+        # действующее — последнее добавленное; в листе ДС идут по возрастанию номера
+        current = latest_addendum(items)
+        items.sort(key=lambda item: natural_key(item.get("number")))
         write_excel_row(ws, [
             "", f"Договор № {contract['number']}", excel_date(contract.get("registrationDate") or contract.get("date")),
             excel_date(contract.get("baseEndDate")),
