@@ -193,8 +193,15 @@
     .data-table tr.row-pay td.actions-col { background: #fffdf7; }
     .data-table tr.row-pay-empty > td { color: var(--muted); font-style: italic; }
     /* группа операций за один день (сумма), раскрывается в отдельные операции */
-    .data-table tr.row-pay-group > td { background: #fff7e3; color: #3b4556; font-weight: 600; }
-    .data-table tr.row-pay-group td.actions-col { background: #fff7e3; }
+    .data-table tr.row-pay-group > td { background: #fff1d6; color: #3b4556; font-weight: 600; cursor: pointer; }
+    .data-table tr.row-pay-group > td:first-child { box-shadow: inset 3px 0 #e0a52a; }
+    .data-table tr.row-pay-group td.actions-col { background: #fff1d6; }
+    .data-table tr.row-pay-group:hover > td { background: #ffe9c2; }
+    .expand-btn.group { min-width: 36px; color: #8a5a00; border-color: #e8c57a; background: #fff8e8; font-size: 12px; }
+    .expand-btn.group .chev { font-size: 14px; }
+    .expand-btn.group:hover, .expand-btn.group.open { color: #6b4400; border-color: #d9a52c; background: #ffe9c2; }
+    .pay-group-label { display: inline-flex; align-items: center; gap: 6px; }
+    .pay-group-label .badge { font-size: 10px; padding: 2px 6px; }
     /* лист «Доп. соглашения»: договор-группа и строки допников под ним */
     .data-table tr.row-group > td { background: #eef8f3; font-weight: 650; }
     .data-table tr.row-group td.actions-col { background: #eef8f3; }
@@ -203,6 +210,14 @@
     /* поле с поиском по списку: ввод букв или цифр показывает совпадения */
     .combo { display: block; width: 100%; }
     .combo-text.invalid { border-color: var(--red); background: #fff5f5; }
+    .combo-menu {
+      position: fixed; z-index: 60; overflow-y: auto; padding: 4px 0; font-size: 12px;
+      background: #fff; border: 1px solid #c9d4ea; border-radius: 8px; box-shadow: 0 10px 24px rgba(20, 35, 60, .16);
+    }
+    .combo-item { padding: 6px 10px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .combo-item.active, .combo-item:hover { background: var(--blue-soft); color: var(--blue-deep); }
+    .combo-item mark { background: #fff1a8; color: inherit; padding: 0 1px; border-radius: 2px; font-weight: 650; }
+    .combo-empty { padding: 6px 10px; color: var(--muted); font-style: italic; }
     .payment-empty { padding: 8px 0; font-size: 12px; color: var(--muted); }
     .main-cell { font-weight: 650; }
     .money { font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -445,8 +460,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<div id="datalists"></div>
-
 <script>
   const rub = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
   const dateFmt = new Intl.DateTimeFormat('ru-RU');
@@ -715,27 +728,44 @@
   }
 
   /* ---------- поле с поиском по списку: можно вписать буквы или цифры, показываются совпадения ---------- */
+  // Два режима: «из списка» (скрытый input хранит id, видимый — подпись) и «свободный» (free: значение — сам текст,
+  // список только подсказывает существующие значения, можно вписать новое). Меню одно на страницу, позиционируется
+  // фиксированно, чтобы его не обрезала ячейка таблицы.
   const comboOptions = {};
-  function comboOptionsHtml(listId) {
-    return (comboOptions[listId] || []).map(([, label]) => `<option value="${esc(label)}">`).join('');
-  }
   function comboLabel(listId, value) {
     if (!value) return '';
     return (comboOptions[listId] || []).find(o => String(o[0]) === String(value))?.[1] || '';
   }
+  const COMBO_EVENTS = 'oninput="comboInput(this)" onfocus="comboShowMenu(this)" onclick="comboShowMenu(this)" onkeydown="comboKey(event, this)" onblur="comboBlur(this)"';
   function comboField(name, options, current, opts = {}) {
     const listId = `combo-${name}`;
     comboOptions[listId] = options.filter(o => o[0] !== '');
     let label = comboLabel(listId, current);
     if (current && !label) { comboOptions[listId].unshift([current, String(current)]); label = String(current); }
     return `<span class="combo"><input type="hidden" name="${esc(name)}" value="${esc(current || '')}" data-list="${listId}" data-commit="${esc(opts.commit || '')}">` +
-      `<input class="combo-text" list="${listId}" value="${esc(label)}" placeholder="${esc(opts.placeholder || 'Начните вводить')}" autocomplete="off"` +
-      `${opts.required ? ' required' : ''}${opts.disabled ? ' disabled' : ''} title="Введите часть номера или названия — появятся совпадения" oninput="comboInput(this)" onchange="comboCommit(this)">` +
-      `<datalist id="${listId}">${comboOptionsHtml(listId)}</datalist></span>`;
+      `<input class="combo-text" value="${esc(label)}" placeholder="${esc(opts.placeholder || 'Начните вводить')}" autocomplete="off" role="combobox" aria-autocomplete="list"` +
+      `${opts.required ? ' required' : ''}${opts.disabled ? ' disabled' : ''} title="Введите часть номера или названия — появятся совпадения" ${COMBO_EVENTS}></span>`;
+  }
+  // Свободное поле с подсказками (контрагент): значение хранится прямо в input[name]
+  function suggestField(name, values, current, opts = {}) {
+    const listId = `combo-${name}`;
+    comboOptions[listId] = values.map(v => [v, v]);
+    const events = opts.oninput ? COMBO_EVENTS.replace('oninput="comboInput(this)"', `oninput="comboInput(this); ${opts.oninput}"`) : COMBO_EVENTS;
+    return `<input name="${esc(name)}" class="combo-text" data-free="1" data-list="${listId}" value="${esc(current || '')}" placeholder="${esc(opts.placeholder || '')}" autocomplete="off" role="combobox" aria-autocomplete="list"` +
+      `${opts.required ? ' required' : ''} title="Можно вписать нового или выбрать из существующих" ${events}>`;
   }
   function comboParts(el) {
+    if (el.dataset && el.dataset.free) return {hidden: el, text: el, free: true};
     const span = el.closest('.combo');
-    return {hidden: span.querySelector('input[type=hidden]'), text: span.querySelector('.combo-text'), list: span.querySelector('datalist')};
+    return {hidden: span.querySelector('input[type=hidden]'), text: span.querySelector('.combo-text'), free: false};
+  }
+  function comboMatches(listId, typed) {
+    const q = partyKey(typed);
+    const options = comboOptions[listId] || [];
+    if (!q) return options;
+    const starts = options.filter(o => partyKey(o[1]).startsWith(q));
+    const inner = options.filter(o => !partyKey(o[1]).startsWith(q) && partyKey(o[1]).includes(q));
+    return [...starts, ...inner];
   }
   function comboResolve(listId, typed) {
     const q = partyKey(typed);
@@ -743,20 +773,140 @@
     const options = comboOptions[listId] || [];
     const exact = options.find(o => partyKey(o[1]) === q);
     if (exact) return {id: exact[0], exact: true};
-    const hits = options.filter(o => partyKey(o[1]).includes(q));
+    const hits = comboMatches(listId, typed);
     return hits.length === 1 ? {id: hits[0][0], exact: false} : null;
   }
   function comboChanged(hidden) {
     const fn = hidden.dataset.commit;
     if (fn && typeof window[fn] === 'function') window[fn]();
   }
-  function comboInput(text) {
+  // Подсветка введённого фрагмента в подписи
+  function comboMark(label, typed) {
+    const q = String(typed || '').trim();
+    if (!q) return esc(label);
+    const idx = partyKey(label).indexOf(partyKey(q));
+    if (idx < 0) return esc(label);
+    const norm = String(label).replace(/ё/g, 'е').replace(/Ё/g, 'Е');
+    let pos = -1, seen = -1;
+    for (let i = 0; i < norm.length; i++) {
+      const ch = norm[i];
+      if (/\s/.test(ch) && i > 0 && /\s/.test(norm[i - 1])) continue;
+      seen += 1;
+      if (seen === idx) { pos = i; break; }
+    }
+    if (pos < 0) return esc(label);
+    const end = pos + q.replace(/\s+/g, ' ').length;
+    return `${esc(label.slice(0, pos))}<mark>${esc(label.slice(pos, end))}</mark>${esc(label.slice(end))}`;
+  }
+  let comboMenuFor = null;
+  let comboActive = -1;
+  let comboFocused = null; // поле, в котором идёт ввод (даже если список уже закрыт прокруткой/Esc)
+  function comboMenuEl() {
+    let menu = document.getElementById('combo-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'combo-menu';
+      menu.className = 'combo-menu';
+      menu.hidden = true;
+      menu.addEventListener('mousedown', event => {
+        const item = event.target.closest('[data-index]');
+        event.preventDefault();
+        if (item && comboMenuFor) comboPick(comboMenuFor, Number(item.dataset.index));
+      });
+      document.body.appendChild(menu);
+    }
+    return menu;
+  }
+  function comboShowMenu(text) {
+    if (text.disabled) return;
     const {hidden} = comboParts(text);
+    const matches = comboMatches(hidden.dataset.list, text.value).slice(0, 60);
+    const menu = comboMenuEl();
+    comboMenuFor = text;
+    comboFocused = text;
+    text._matches = matches;
+    comboActive = matches.length && text.value.trim() ? 0 : -1;
+    menu.innerHTML = matches.length
+      ? matches.map((o, i) => `<div class="combo-item ${i === comboActive ? 'active' : ''}" data-index="${i}" title="${esc(o[1])}">${comboMark(o[1], text.value)}</div>`).join('')
+      : `<div class="combo-empty">${hidden.dataset.free ? 'Новое значение — будет сохранено как введено' : 'Совпадений нет'}</div>`;
+    const rect = text.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 320))}px`;
+    menu.style.minWidth = `${Math.max(rect.width, 280)}px`;
+    menu.style.maxWidth = `${Math.max(320, window.innerWidth - 32)}px`;
+    const below = window.innerHeight - rect.bottom;
+    if (below < 180 && rect.top > below) {
+      menu.style.top = 'auto';
+      menu.style.bottom = `${window.innerHeight - rect.top + 2}px`;
+      menu.style.maxHeight = `${Math.min(260, rect.top - 12)}px`;
+    } else {
+      menu.style.bottom = 'auto';
+      menu.style.top = `${rect.bottom + 2}px`;
+      menu.style.maxHeight = `${Math.min(260, below - 12)}px`;
+    }
+    menu.hidden = false;
+    text.setAttribute('aria-expanded', 'true');
+  }
+  function comboHideMenu() {
+    const menu = document.getElementById('combo-menu');
+    if (menu) menu.hidden = true;
+    if (comboMenuFor) comboMenuFor.setAttribute('aria-expanded', 'false');
+    comboMenuFor = null;
+    comboActive = -1;
+  }
+  function comboHighlight() {
+    const menu = comboMenuEl();
+    [...menu.querySelectorAll('.combo-item')].forEach((el, i) => el.classList.toggle('active', i === comboActive));
+    const active = menu.querySelector('.combo-item.active');
+    if (active) active.scrollIntoView({block: 'nearest'});
+  }
+  function comboPick(text, index) {
+    const {hidden, free} = comboParts(text);
+    const option = (text._matches || [])[index];
+    if (!option) return;
+    const prev = hidden.value;
+    if (free) {
+      text.value = option[1];
+      text.dispatchEvent(new Event('input', {bubbles: true}));
+    } else {
+      hidden.value = String(option[0]);
+      text.value = option[1];
+    }
+    text.classList.remove('invalid');
+    text.title = 'Введите часть номера или названия — появятся совпадения';
+    comboHideMenu();
+    if (!free && hidden.value !== prev) comboChanged(hidden);
+  }
+  function comboKey(event, text) {
+    const open = comboMenuFor === text && !comboMenuEl().hidden;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!open) { comboShowMenu(text); return; }
+      const n = (text._matches || []).length;
+      if (!n) return;
+      comboActive = event.key === 'ArrowDown' ? (comboActive + 1) % n : (comboActive - 1 + n) % n;
+      comboHighlight();
+    } else if (event.key === 'Enter') {
+      if (open && comboActive >= 0) { event.preventDefault(); comboPick(text, comboActive); }
+      else if (!comboParts(text).free) { event.preventDefault(); comboCommit(text); comboHideMenu(); }
+    } else if (event.key === 'Escape') {
+      if (open) { event.preventDefault(); comboHideMenu(); }
+    }
+  }
+  function comboInput(text) {
+    const {hidden, free} = comboParts(text);
+    text.classList.remove('invalid');
+    if (free) { comboShowMenu(text); return; }
     const hit = comboResolve(hidden.dataset.list, text.value);
     const prev = hidden.value;
     hidden.value = hit && hit.exact ? String(hit.id) : '';
-    text.classList.remove('invalid');
+    comboShowMenu(text);
     if (hidden.value !== prev) comboChanged(hidden);
+  }
+  function comboBlur(text) {
+    // mousedown по пункту меню отменён через preventDefault, поэтому blur сюда приходит только при настоящем уходе с поля
+    comboHideMenu();
+    if (comboFocused === text) comboFocused = null;
+    if (!comboParts(text).free) comboCommit(text);
   }
   function comboCommit(text) {
     const {hidden} = comboParts(text);
@@ -766,13 +916,26 @@
       hidden.value = String(hit.id);
       text.value = comboLabel(hidden.dataset.list, hidden.value);
       text.classList.remove('invalid');
+      text.title = 'Введите часть номера или названия — появятся совпадения';
     } else {
       hidden.value = '';
       text.classList.add('invalid');
-      text.title = 'Совпадений нет — выберите значение из списка';
+      const n = comboMatches(hidden.dataset.list, text.value).length;
+      text.title = n ? `Найдено ${n} совпадений — уточните ввод или выберите из списка` : 'Совпадений нет — выберите значение из списка';
     }
     if (hidden.value !== prev) comboChanged(hidden);
   }
+  document.addEventListener('scroll', () => { if (comboMenuFor) comboHideMenu(); }, true);
+  // Клик мимо поля: зафиксировать введённое (как при уходе с поля) и закрыть меню
+  document.addEventListener('mousedown', event => {
+    if (event.target.closest('#combo-menu')) return;
+    const text = comboFocused || comboMenuFor;
+    if (!text || event.target === text) return;
+    comboHideMenu();
+    comboFocused = null;
+    if (text.isConnected && !comboParts(text).free) comboCommit(text);
+  });
+  window.addEventListener('resize', () => { if (comboMenuFor) comboHideMenu(); });
   function comboHidden(row, name) { return row.querySelector(`input[type=hidden][name="${name}"]`); }
   function comboSet(row, name, value) {
     const hidden = comboHidden(row, name);
@@ -780,16 +943,16 @@
     const {text} = comboParts(hidden);
     const listId = hidden.dataset.list;
     hidden.value = value == null ? '' : String(value);
-    if (hidden.value && !comboLabel(listId, hidden.value)) {
-      comboOptions[listId] = [[hidden.value, hidden.value], ...(comboOptions[listId] || [])];
-      comboParts(hidden).list.innerHTML = comboOptionsHtml(listId);
-    }
+    if (hidden.value && !comboLabel(listId, hidden.value)) comboOptions[listId] = [[hidden.value, hidden.value], ...(comboOptions[listId] || [])];
     text.value = comboLabel(listId, hidden.value);
     text.classList.remove('invalid');
   }
   function comboDisable(row, name, flag) {
     const hidden = comboHidden(row, name);
-    if (hidden) comboParts(hidden).text.disabled = !!flag;
+    if (!hidden) return;
+    const {text} = comboParts(hidden);
+    text.disabled = !!flag;
+    if (flag && comboMenuFor === text) comboHideMenu();
   }
   function comboRequire(row, name, flag) {
     const hidden = comboHidden(row, name);
@@ -798,14 +961,14 @@
   function comboSetOptions(row, name, options, placeholder) {
     const hidden = comboHidden(row, name);
     if (!hidden) return;
-    const {text, list} = comboParts(hidden);
+    const {text} = comboParts(hidden);
     const listId = hidden.dataset.list;
     comboOptions[listId] = options.filter(o => o[0] !== '');
-    list.innerHTML = comboOptionsHtml(listId);
     if (hidden.value && !comboLabel(listId, hidden.value)) hidden.value = '';
     if (hidden.value) text.value = comboLabel(listId, hidden.value);
     else if (!document.activeElement || document.activeElement !== text) text.value = '';
     if (placeholder != null) text.placeholder = placeholder;
+    if (comboMenuFor === text) comboShowMenu(text);
   }
 
   /* ---------- фильтры ---------- */
@@ -1041,23 +1204,25 @@
     return `<tr class="row-pay ${depth > 1 ? 'row-pay-deep' : ''} row-pay-empty"><td class="expand-col"></td><td></td><td colspan="${CONTRACT_COLS.length - 3}">Операций нет</td><td class="actions-col"></td></tr>`;
   }
   // Группировка операций по дню оплаты: несколько операций за один день сворачиваются в одну строку с суммой
-  function paymentDayKey(p) { return String(p.paymentDate || p.date || '').slice(0, 10); }
+  // Ключ дня — дата оплаты; операции без даты оплаты попадают в общую группу «Без даты оплаты»
+  function paymentDayKey(p) { return String(p.paymentDate || '').slice(0, 10); }
   function groupPaymentsByDay(list) {
     const groups = [];
     const byDay = new Map();
     list.forEach(p => {
       const day = paymentDayKey(p);
-      if (!day) { groups.push({day: '', items: [p]}); return; }
       if (!byDay.has(day)) { const group = {day, items: []}; byDay.set(day, group); groups.push(group); }
       byDay.get(day).items.push(p);
     });
     return groups;
   }
+  function paymentGroupKey(owner, group) { return `day:${owner.id}:${group.day || 'none'}`; }
   function paymentGroupRow(group, owner, depth, open) {
     const items = group.items;
-    const key = `day:${owner.id}:${group.day}`;
+    const key = paymentGroupKey(owner, group);
     const grossOf = p => Number(p.amount) || Number(p.approvalAmount) || 0;
     const total = items.reduce((s, p) => s + grossOf(p), 0);
+    const paid = items.filter(p => p.status === 'paid').reduce((s, p) => s + grossOf(p), 0);
     const wovat = items.reduce((s, p) => s + amountWithoutVat(grossOf(p), p.approvalVatRate ?? DEFAULT_VAT), 0);
     const same = pick => { const set = new Set(items.map(pick)); return set.size === 1 ? [...set][0] : null; };
     const type = same(p => p.type);
@@ -1066,16 +1231,18 @@
     const kind = same(p => p.paymentKind === 'stage' ? 'gu' : p.paymentKind);
     const numbers = items.map(p => p.number || '—').join(', ');
     const dup = items.some(isDuplicateCard) ? 'dup-card' : '';
-    const title = `${items.length} операции за ${showDate(group.day)} на сумму ${money(total)}`;
-    return `<tr class="row-pay row-pay-group ${depth > 1 ? 'row-pay-deep' : ''} ${dup}" data-group="${esc(key)}">
-          <td class="expand-col"><button type="button" class="expand-btn ${open ? 'open' : ''}" onclick="toggleContractExpand('${esc(key)}')" title="${esc(title)}"><span class="chev">▸</span><span class="count">${items.length}</span></button></td>
-          <td>${cellText(same(p => p.documentCard) ?? 'несколько')}</td>
-          <td><div class="main-cell" title="${esc(numbers)}">₽ ${items.length} опер.: ${esc(numbers)}</div></td>
+    const dayLabel = group.day ? showDate(group.day) : 'Без даты оплаты';
+    const title = `${open ? 'Свернуть' : 'Раскрыть'}: ${items.length} опер. ${group.day ? 'за ' + dayLabel : 'без даты оплаты'} на сумму ${money(total)}`;
+    const statusCell = status ? executionBadge(status) : `<span class="badge blue" title="Исполнено ${money(paid)} из ${money(total)}">Исп. ${money(paid)}</span>`;
+    return `<tr class="row-pay row-pay-group ${depth > 1 ? 'row-pay-deep' : ''} ${dup}" data-group="${esc(key)}" onclick="if(!event.target.closest('button')) toggleContractExpand('${esc(key)}')" title="${esc(title)}">
+          <td class="expand-col"><button type="button" class="expand-btn group ${open ? 'open' : ''}" onclick="toggleContractExpand('${esc(key)}')" title="${esc(title)}"><span class="chev">▸</span><span class="count">${items.length}</span></button></td>
+          <td>${cellText(same(p => p.documentCard) ?? '')}</td>
+          <td><div class="main-cell pay-group-label" title="${esc(numbers)}"><span class="badge amber">${items.length} опер.</span><span>${esc(numbers)}</span></div></td>
           <td>${same(p => p.approvalDate || p.date) ? showDate(same(p => p.approvalDate || p.date)) : '—'}</td>
-          <td>${showDate(group.day)}</td>
+          <td><div class="main-cell">${esc(dayLabel)}</div></td>
           <td><div class="main-cell">${esc(same(p => p.counterparty || owner.counterparty) ?? 'несколько')}</div></td>
           <td class="cell-center">${type ? `<span class="badge ${type === 'income' ? 'green' : 'amber'}">${payTypeLabel[type] || '—'}</span>` : '—'}</td>
-          <td>${status ? executionBadge(status) : '<span class="badge gray">Разные</span>'}</td>
+          <td>${statusCell}</td>
           ${moneyCell(total, '', 'amount')}
           <td class="cell-center">${rate != null ? (rate ? rate + '%' : '—') : 'разн.'}</td>
           ${moneyCell(wovat)}
@@ -1099,7 +1266,7 @@
     if (!list.length) return emptyPaymentsRow(depth);
     return groupPaymentsByDay(list).map(group => {
       if (group.items.length === 1) return contractPaymentRow(group.items[0], owner, depth);
-      const open = expandedContracts.has(`day:${owner.id}:${group.day}`);
+      const open = expandedContracts.has(paymentGroupKey(owner, group));
       let html = paymentGroupRow(group, owner, depth, open);
       if (open) html += group.items.map(p => contractPaymentRow(p, owner, depth + 1)).join('');
       return html;
@@ -1176,6 +1343,7 @@
     return `<td class="money cell-number ${Number(c.amount) < 0 ? 'neg' : ''}" data-field="amount" title="${esc(title)}">${money(c.amount)}<span class="ds-mark">ДС</span></td>`;
   }
   function renderContracts() {
+    comboHideMenu();
     refreshDuplicateCards();
     const {rows, openParents} = topContracts();
     const editItem = editing?.type === 'contract'
@@ -1343,7 +1511,7 @@
       <td><input name="number" required value="${esc(c.number)}" placeholder="№" autocomplete="off"></td>
       <td><input name="reviewDate" type="date" value="${esc(c.reviewDate || c.date)}"></td>
       <td><input name="registrationDate" type="date" value="${esc(c.registrationDate || c.date)}"></td>
-      <td><input name="counterparty" required value="${esc(c.counterparty)}" placeholder="Контрагент" list="counterparty-list" oninput="applyContractFieldRules()"></td>
+      <td>${suggestField('counterparty', counterpartyNames(), c.counterparty, {placeholder: 'Контрагент: новый или из списка', required: true, oninput: 'applyContractFieldRules()'})}</td>
       <td><select name="direction" onchange="applyContractFieldRules()">${optionTags([['income','Доходный'],['expense','Расходный']], c.direction || 'expense')}</select></td>
       <td><input name="subject" required value="${esc(c.subject)}" placeholder="Предмет"></td>
       <td><input name="amount" inputmode="decimal" required value="${amount ?? ''}" placeholder="0" autocomplete="off"${lockAttr}></td>
@@ -1400,6 +1568,7 @@
     return list.sort((a, b) => key(a).localeCompare(key(b)) * paymentSort.dir || String(a.number).localeCompare(String(b.number)));
   }
   function renderPayments() {
+    comboHideMenu();
     refreshDuplicateCards();
     const rows = filteredPayments();
     const editItem = editing?.type === 'payment'
@@ -1450,11 +1619,11 @@
       : `<div class="empty">Ничего не найдено</div>`;
     applyPaymentFieldRules();
   }
-  function counterpartyDatalist() {
+  function counterpartyNames() {
     const names = new Set();
     state.contracts.forEach(c => c.counterparty && names.add(c.counterparty));
     state.payments.forEach(p => p.counterparty && names.add(p.counterparty));
-    return `<datalist id="counterparty-list">${[...names].sort((a, b) => a.localeCompare(b, 'ru')).map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
+    return [...names].sort((a, b) => a.localeCompare(b, 'ru'));
   }
   function paymentContractOptions() {
     return orderedContracts(state.contracts.filter(c => c.documentKind === 'contract' || c.parentContractId))
@@ -1514,7 +1683,7 @@
       <td><input name="paymentDate" type="date" value="${esc(p.paymentDate || '')}" title="Можно оставить пустой, пока оплата не прошла"></td>
       <td class="cell-center">${executionBadge(p.paymentDate ? (p.status === 'cancelled' ? 'cancelled' : 'paid') : 'planned')}</td>
       <td>${comboField('contractId', paymentContractOptions(), p.contractId || '', {placeholder: 'Договор: номер или контрагент', commit: 'autofillPayment'})}</td>
-      <td><input name="counterparty" required value="${esc(p.counterparty || c?.counterparty || '')}" placeholder="Контрагент" list="counterparty-list"></td>
+      <td>${suggestField('counterparty', counterpartyNames(), p.counterparty || c?.counterparty || '', {placeholder: 'Контрагент: новый или из списка', required: true})}</td>
       <td><input name="approvalAmount" inputmode="decimal" value="${p.approvalAmount ?? p.amount ?? ''}" placeholder="Сумма" autocomplete="off"></td>
       <td><select name="approvalVatRate">${VAT_RATES.map(v => `<option value="${v}" ${Number(p.approvalVatRate ?? DEFAULT_VAT)===v?'selected':''}>${v ? v + '%' : '0'}</option>`).join('')}</select></td>
       <td class="cell-number">—</td>
@@ -1554,6 +1723,7 @@
     renderAddendums();
   }
   function renderAddendums() {
+    comboHideMenu();
     refreshDuplicateCards();
     const all = state.addendums || [];
     const filtering = activeFilters.addendum.length > 0;
@@ -2173,7 +2343,7 @@
     } catch (error) { if (!quiet(error)) toast('Не удалось удалить операцию'); }
   }
   function renderAll() {
-    document.getElementById('datalists').innerHTML = counterpartyDatalist();
+    comboHideMenu();
     renderContracts(); renderAddendums(); renderPayments(); renderAnalytics(); renderDictionaries(); renderHistory();
   }
   function toast(message) {
