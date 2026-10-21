@@ -1972,9 +1972,10 @@
     if (analyticsAllOpen) {
       analyticsAllOpen = false;
       expandedAnalytics.clear();
-      state.contracts.forEach(c => { expandedAnalytics.add(c.id); expandedAnalytics.add('free-' + c.id); });
+      state.contracts.forEach(c => { expandedAnalytics.add(c.id); expandedAnalytics.add('free-' + c.id); expandedAnalytics.add('nodoc-free-' + c.id); });
       expandedAnalytics.add('nofunding');
       expandedAnalytics.add('free-nofunding');
+      expandedAnalytics.add('nodoc-free-nofunding');
     }
     if (expandedAnalytics.has(key)) expandedAnalytics.delete(key); else expandedAnalytics.add(key);
     renderAnalytics();
@@ -2021,20 +2022,29 @@
     if (free == null) return '';
     return treeRow('row-spec', [EMPTY, EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
   }
-  function freePaymentsRows(list, key) {
+  // Операции без договора делятся на две группы: «Счета без договора» и «Счета без договора без счета» (вид «Без договора и без счета»)
+  function isNoDocPayment(p) { return p.documentKind === 'none'; }
+  function freePaymentGroups(list, key) {
+    return freePaymentsRows(list.filter(p => !isNoDocPayment(p)), key) + freePaymentsRows(list.filter(isNoDocPayment), 'nodoc-' + key, true);
+  }
+  function freeGroupCount(list) { return (list.some(p => !isNoDocPayment(p)) ? 1 : 0) + (list.some(isNoDocPayment) ? 1 : 0); }
+  function freePaymentsRows(list, key, noDoc = false) {
     if (!list.length) return '';
     const total = sumAmount(list);
     const paid = sumPaid(list);
+    const title = noDoc ? 'Счета без договора без счета' : 'Счета без договора';
     let html = treeRow('row-pay', [
       EMPTY,
       `<td class="expand-col">${expandBtn(key, list.length)}</td>`,
-      `<td>Счета без договора (${list.length})</td>`, EMPTY, EMPTY, '<td class="cell-center"><span class="badge gray">Счета</span></td>', EMPTY,
+      `<td>${title} (${list.length})</td>`, EMPTY, EMPTY, `<td class="cell-center"><span class="badge gray">${noDoc ? 'Без счета' : 'Счета'}</span></td>`, EMPTY,
       moneyCell(total), moneyCell(paid), moneyCell(total - paid), EMPTY, EMPTY, EMPTY, percentCell(factPercent(paid, total))
     ]);
     if (isOpen(key)) {
       list.forEach(p => {
+        // для операций без счета в названии показывается статья БДДС: «р/с · Арматура · 20.10.2026»
+        const name = [p.number, noDoc ? p.bdds : '', showDate(p.paymentDate || p.date)].filter(Boolean).map(esc).join(' · ');
         html += treeRow(`row-spec ${dupClass(p)}`, [
-          `<td${dupTitle(p)}>${cellText(p.documentCard)}</td>`, EMPTY, `<td title="${esc(p.number)}">${esc(p.number)} · ${showDate(p.paymentDate || p.date)}${p.comment ? ' · ' + esc(p.comment) : ''}</td>`, EMPTY,
+          `<td${dupTitle(p)}>${cellText(p.documentCard)}</td>`, EMPTY, `<td title="${esc(p.number)}">${name}${p.comment ? ' · ' + esc(p.comment) : ''}</td>`, EMPTY,
           `<td>${cellText(p.counterparty)}</td>`, `<td class="cell-center">${payDocLabel[p.documentKind] || '—'}</td>`, `<td>${cellText(p.project)}</td>`,
           moneyCell(p.amount), moneyCell(p.status === 'paid' ? p.amount : 0), EMPTY, EMPTY, EMPTY, EMPTY, percentCell(factPercent(p.status === 'paid' ? p.amount : 0, p.amount))
         ]);
@@ -2086,7 +2096,7 @@
       const incMatch = matchedIds.has(inc.id);
       const visibleFunded = filtering && !incMatch ? funded.filter(c => matchedIds.has(c.id) || childrenOf(c.id).some(k => matchedIds.has(k.id))) : funded;
       if (filtering && !incMatch && !visibleFunded.length) return;
-      const count = funded.length + (free.length ? 1 : 0) + childrenOf(inc.id).length;
+      const count = funded.length + freeGroupCount(free) + childrenOf(inc.id).length;
       const ctd = contracted(inc);
       rows += contractTreeRow(inc, 'row-income', `Договор № ${inc.number} от ${showDate(inc.date)} · ${inc.subject}`, {
         btn: count ? expandBtn(inc.id, count) : '', contracted: ctd, balance: Number(inc.amount || 0) - ctd
@@ -2095,7 +2105,7 @@
         childrenOf(inc.id).forEach(k => { rows += contractTreeRow(k, 'row-spec', `${labels[k.category] || 'Спецификация'} ${k.number} · ${k.subject}`); });
         if (childrenOf(inc.id).length) rows += freeLimitRow(inc);
         visibleFunded.forEach(c => { rows += contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true}); });
-        rows += freePaymentsRows(free, 'free-' + inc.id);
+        rows += freePaymentGroups(free, 'free-' + inc.id);
       }
     });
     const orphans = expense.filter(c => !c.fundingContractId || !contractById(c.fundingContractId));
@@ -2106,13 +2116,13 @@
       const fact = orphans.reduce((s, c) => s + contractFact(c), 0) + sumPaid(orphanFree);
       rows += treeRow('row-free', [
         EMPTY,
-        `<td class="expand-col">${expandBtn('nofunding', orphans.length + (orphanFree.length ? 1 : 0))}</td>`,
+        `<td class="expand-col">${expandBtn('nofunding', orphans.length + freeGroupCount(orphanFree))}</td>`,
         '<td>[!] Без источника финансирования</td>', EMPTY, EMPTY, EMPTY, EMPTY,
         moneyCell(total), moneyCell(fact), moneyCell(total - fact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(fact, total))
       ]);
       if (isOpen('nofunding') || filtering) {
         visibleOrphans.forEach(c => { rows += contractTreeRow(c, 'row-expense', `Договор № ${c.number} от ${showDate(c.date)} · ${c.subject}`, {expandable: true}); });
-        if (!filtering) rows += freePaymentsRows(orphanFree, 'free-nofunding');
+        if (!filtering) rows += freePaymentGroups(orphanFree, 'free-nofunding');
       }
     }
     rows += treeRow('row-total', ['<td></td><td></td><td>Итого доходы</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(incomeLimit), moneyCell(incomeFact), moneyCell(incomeLimit - incomeFact), EMPTY, EMPTY, EMPTY, percentCell(factPercent(incomeFact, incomeLimit))]);

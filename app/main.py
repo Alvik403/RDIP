@@ -2283,17 +2283,24 @@ def sheet_analytics(wb, contracts, payments):
             remember(bucket, start)
 
     def write_free(items, bucket):
+        # две группы: «Счета без договора» и «Счета без договора без счета» (вид «Без договора и без счета»)
+        write_free_group([item for item in items if item.get("documentKind") != "none"], bucket, False)
+        write_free_group([item for item in items if item.get("documentKind") == "none"], bucket, True)
+
+    def write_free_group(items, bucket, no_doc):
         if not items:
             return
         total = sum((excel_dec(item.get("amount")) for item in items), Decimal(0)).quantize(MONEY)
         fact = sum((excel_dec(item.get("amount")) for item in items if item.get("status") == "paid"), Decimal(0)).quantize(MONEY)
-        write_excel_row(ws, analytics_values(f"Счета без договора ({len(items)})", "", "", "Счета", "", total, fact, fact_percent=excel_share(fact, total)), kinds, bold=True)
+        title = "Счета без договора без счета" if no_doc else "Счета без договора"
+        write_excel_row(ws, analytics_values(f"{title} ({len(items)})", "", "", "Без счета" if no_doc else "Счета", "", total, fact, fact_percent=excel_share(fact, total)), kinds, bold=True)
         start = ws.max_row + 1
         for payment in items:
             paid = excel_money(payment.get("amount")) if payment.get("status") == "paid" else Decimal("0.00")
             amount = excel_money(payment.get("amount"))
+            name_parts = [payment.get("number") or "", payment.get("bdds") or "" if no_doc else "", payment.get("paymentDate") or payment.get("approvalDate") or ""]
             write_excel_row(ws, analytics_values(
-                f"{payment.get('number') or ''} · {payment.get('paymentDate') or payment.get('approvalDate') or ''}",
+                " · ".join(part for part in name_parts if part),
                 "",
                 payment.get("counterparty") or "",
                 display_choice(payment.get("documentKind") or "", PAYMENT_DOC_LABELS),
@@ -2640,8 +2647,20 @@ def update_entity(request: Request, kind: str, entity_id: str, payload: dict):
             entity = normalize_payment({**payload, "id": entity_id}, current)
             action, label = "Операция изменена", f"{entity['number']} · {entity['amount']}"
         saved = apply_saved(conn, kind, entity, int(current["version"]) + 1)
+        if kind == "contract" and not entity.get("parentContractId") and (current.get("fundingContractId") or "") != (entity.get("fundingContractId") or ""):
+            propagate_funding(conn, entity_id, entity.get("fundingContractId") or "")
         audit(conn, row["username"], action, kind, entity_id, label, current, public_copy(saved))
     return saved
+
+
+def propagate_funding(conn, contract_id: str, funding_id: str):
+    """Источник финансирования договора переходит на его спецификации/заявки и на платежи по ним."""
+    conn.execute("UPDATE contracts SET funding_contract_id = %s WHERE parent_contract_id = %s", (funding_id, contract_id))
+    conn.execute(
+        """UPDATE payments SET funding_contract_id = %s
+           WHERE contract_id = %s OR contract_id IN (SELECT id FROM contracts WHERE parent_contract_id = %s)""",
+        (funding_id, contract_id, contract_id),
+    )
 
 
 def delete_entity(request: Request, kind: str, entity_id: str, version: int):
