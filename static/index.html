@@ -2022,7 +2022,7 @@
     if (free == null) return '';
     return treeRow('row-spec', [EMPTY, EMPTY, '<td>Свободный лимит (без спецификаций)</td>', EMPTY, EMPTY, EMPTY, EMPTY, moneyCell(free), EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
   }
-  // Операции без договора делятся на две группы: «Счета без договора» и «Счета без договора без счета» (вид «Без договора и без счета»)
+  // Операции без договора делятся на две группы: «Счета без договора» и «Без договора без счета» (вид «Без договора и без счета»)
   function isNoDocPayment(p) { return p.documentKind === 'none'; }
   function freePaymentGroups(list, key) {
     return freePaymentsRows(list.filter(p => !isNoDocPayment(p)), key) + freePaymentsRows(list.filter(isNoDocPayment), 'nodoc-' + key, true);
@@ -2032,7 +2032,7 @@
     if (!list.length) return '';
     const total = sumAmount(list);
     const paid = sumPaid(list);
-    const title = noDoc ? 'Счета без договора без счета' : 'Счета без договора';
+    const title = noDoc ? 'Без договора без счета' : 'Счета без договора';
     let html = treeRow('row-pay', [
       EMPTY,
       `<td class="expand-col">${expandBtn(key, list.length)}</td>`,

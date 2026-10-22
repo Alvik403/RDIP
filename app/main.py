@@ -2283,7 +2283,7 @@ def sheet_analytics(wb, contracts, payments):
             remember(bucket, start)
 
     def write_free(items, bucket):
-        # две группы: «Счета без договора» и «Счета без договора без счета» (вид «Без договора и без счета»)
+        # две группы: «Счета без договора» и «Без договора без счета» (вид «Без договора и без счета»)
         write_free_group([item for item in items if item.get("documentKind") != "none"], bucket, False)
         write_free_group([item for item in items if item.get("documentKind") == "none"], bucket, True)
 
@@ -2292,7 +2292,7 @@ def sheet_analytics(wb, contracts, payments):
             return
         total = sum((excel_dec(item.get("amount")) for item in items), Decimal(0)).quantize(MONEY)
         fact = sum((excel_dec(item.get("amount")) for item in items if item.get("status") == "paid"), Decimal(0)).quantize(MONEY)
-        title = "Счета без договора без счета" if no_doc else "Счета без договора"
+        title = "Без договора без счета" if no_doc else "Счета без договора"
         write_excel_row(ws, analytics_values(f"{title} ({len(items)})", "", "", "Без счета" if no_doc else "Счета", "", total, fact, fact_percent=excel_share(fact, total)), kinds, bold=True)
         start = ws.max_row + 1
         for payment in items:
