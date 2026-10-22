@@ -503,16 +503,23 @@
       {id:'reviewDate', label:'Дата рассмотр/регистр.', type:'date'},
       {id:'endDate', label:'Дата окончания действия', type:'date'},
       {id:'counterparty', label:'Контрагент'},
-      {id:'subject', label:'Предмет договора'},
+      {id:'direction', label:'Вид', type:'select', options:[['income','Доходный'],['expense','Расходный']]},
+      {id:'subject', label:'Предмет'},
+      {id:'amount', label:'Сумма с НДС'},
+      {id:'vatRate', label:'НДС', type:'select', options:VAT_RATES.map(v => [String(v), v ? v + '%' : '0%'])},
+      {id:'amountWithoutVat', label:'Без НДС'},
       {id:'fundingSource', label:'Источник финансирования'},
       {id:'project', label:'Проект'},
-      {id:'responsible', label:'ФИО ответственного'},
-      {id:'comment', label:'Комментарий'},
-      {id:'documentKind', label:'Вид документа', type:'select', options:CONTRACT_DOC},
-      {id:'direction', label:'Вид договора', type:'select', options:[['income','Доходный'],['expense','Расходный']]},
-      {id:'kind', label:'Рамочный / нерамочный', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]},
+      {id:'responsible', label:'Ответств.'},
+      {id:'documentKind', label:'Вид док.', type:'select', options:CONTRACT_DOC},
+      {id:'kind', label:'Подвид', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]},
       {id:'category', label:'Категория', type:'select', options:CATEGORIES},
-      {id:'parentNumber', label:'Договор-основание'}
+      {id:'parentNumber', label:'Договор-основание'},
+      {id:'otherExpense', label:'Прочие расх.', type:'select', options:[['1','да'],['0','нет']]},
+      {id:'limitRemainder', label:'Ост. лимита'},
+      {id:'payRemainder', label:'Ост. оплат'},
+      {id:'advancePercent', label:'% авансирования'},
+      {id:'comment', label:'Коммент.'}
     ],
     addendum: [
       {id:'number', label:'Номер документа'},
@@ -521,32 +528,51 @@
       {id:'counterparty', label:'Контрагент'},
       {id:'approvalDate', label:'Дата согласования', type:'date'},
       {id:'endDate', label:'Изменение сроков', type:'date'},
-      {id:'responsible', label:'ФИО ответственного'},
+      {id:'amount', label:'Сумма'},
+      {id:'vatRate', label:'НДС', type:'select', options:VAT_RATES.map(v => [String(v), v ? v + '%' : '0%'])},
+      {id:'advancePercent', label:'% авансирования'},
+      {id:'responsible', label:'Ответственный'},
       {id:'comment', label:'Комментарий'}
     ],
     payment: [
       {id:'documentCard', label:'Карта документа'},
       {id:'number', label:'Номер документа'},
-      {id:'contractNumber', label:'Номер договора'},
-      {id:'approvalDate', label:'Дата согласования', type:'date'},
-      {id:'paymentDate', label:'Дата оплаты', type:'date'},
+      {id:'approvalDate', label:'Соглас.', type:'date'},
+      {id:'paymentDate', label:'Оплата', type:'date'},
+      {id:'status', label:'Исполнение', type:'select', options:[['paid','Исполнен'],['planned','Не исполнен'],['cancelled','Отменен']]},
+      {id:'contractNumber', label:'Договор'},
       {id:'counterparty', label:'Контрагент'},
-      {id:'fundingSource', label:'Источник финансирования'},
+      {id:'approvalAmount', label:'Сумма с НДС'},
+      {id:'vatCell', label:'НДС'},
+      {id:'approvalAmountWithoutVat', label:'Без НДС'},
+      {id:'amount', label:'Сумма оплаты'},
       {id:'documentKind', label:'Вид', type:'select', options:PAYMENT_DOC},
       {id:'type', label:'Вид платежа', type:'select', options:PAY_TYPES},
-      {id:'bdds', label:'Статья БДДС'},
+      {id:'subtype', label:'Подвид', type:'select', options:[['specification','Спецификация'],['request','Заявка'],['invoice','Счёт']]},
+      {id:'bdds', label:'БДДС'},
       {id:'cfo', label:'ЦФО'},
       {id:'paymentKind', label:'Вид оплаты', type:'select', options:[['advance','Аванс'],['postpay','Постоплата'],['gu','ГУ']]},
-      {id:'responsible', label:'ФИО ответственного'}
+      {id:'fundingSource', label:'Источник финансирования'},
+      {id:'responsible', label:'Ответств.'},
+      {id:'comment', label:'Коммент.'}
     ],
     analytics: [
       {id:'any', label:'Любое поле'},
-      {id:'number', label:'Номер договора'},
+      {id:'documentCard', label:'Карта документа'},
+      {id:'title', label:'Договор'},
+      {id:'kind', label:'Рамочный / нерамочный', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]},
       {id:'counterparty', label:'Контрагент'},
-      {id:'project', label:'Проект'},
-      {id:'subject', label:'Предмет'},
       {id:'direction', label:'Тип', type:'select', options:[['income','Доходный'],['expense','Расходный']]},
-      {id:'kind', label:'Рамочный / нерамочный', type:'select', options:[['framework','Рамочный'],['fixed','Нерамочный']]}
+      {id:'project', label:'Проект'},
+      {id:'number', label:'Номер договора'},
+      {id:'subject', label:'Предмет'},
+      {id:'amount', label:'Лимит'},
+      {id:'fact', label:'Факт (оплаты)'},
+      {id:'payRemainder', label:'Остаток оплат'},
+      {id:'contracted', label:'Законтрактовано расходов'},
+      {id:'balance', label:'Остаток (доход − расход)'},
+      {id:'advancePercent', label:'% по условию договора'},
+      {id:'factPercent', label:'% Факт'}
     ]
   };
 
@@ -745,6 +771,7 @@
     const c = contractById(a.contractId);
     if (id === 'counterparty') return c?.counterparty || '';
     if (id === 'contractNumber') return c?.number || '';
+    if (id === 'amount' || id === 'vatRate' || id === 'advancePercent') return a[id] == null || a[id] === '' ? '' : String(a[id]);
     return a[id] || '';
   }
 
@@ -993,27 +1020,54 @@
   }
 
   /* ---------- фильтры ---------- */
+  function moneyText(value) { return value == null || value === '' || !Number.isFinite(Number(value)) ? '' : String(value); }
   function contractField(c, id) {
     if (id === 'reviewDate') return c.reviewDate || c.date || '';
     if (id === 'registrationDate') return c.registrationDate || c.date || '';
     if (id === 'endDate') return c.endDate || '';
     if (id === 'fundingSource') return fundingLabel(c.fundingContractId) || c.fundingSource || '';
     if (id === 'parentNumber') return contractById(c.parentContractId)?.number || '';
+    if (id === 'amount' || id === 'vatRate' || id === 'amountWithoutVat' || id === 'advancePercent') return moneyText(c[id]);
+    if (id === 'limitRemainder') return moneyText(contractLimitRemainder(c));
+    if (id === 'payRemainder') return moneyText(contractPayRemainder(c));
+    if (id === 'otherExpense') return c.otherExpense ? '1' : '0';
     return c[id] || '';
   }
   function paymentField(p, id) {
-    if (id === 'counterparty') return p.counterparty || contractById(p.contractId)?.counterparty || '';
-    if (id === 'contractNumber') return contractById(p.contractId)?.number || '';
-    if (id === 'fundingSource') return fundingLabel(p.fundingContractId || contractById(p.contractId)?.fundingContractId);
+    const contract = contractById(p.contractId);
+    if (id === 'counterparty') return p.counterparty || contract?.counterparty || '';
+    if (id === 'contractNumber') return contract ? contractLabel(contract) : '';
+    if (id === 'fundingSource') return fundingLabel(p.fundingContractId || contract?.fundingContractId);
     if (id === 'approvalDate') return p.approvalDate || p.date || '';
     if (id === 'approvalEndDate') return p.approvalEndDate || '';
     if (id === 'postedDate') return p.postedDate || '';
-    if (id === 'paymentDate') return p.paymentDate || p.date || '';
+    if (id === 'paymentDate') return p.paymentDate || '';
     if (id === 'paymentKind') return p.paymentKind === 'stage' ? 'gu' : (p.paymentKind || '');
+    if (id === 'status') return p.status === 'paid' || p.status === 'cancelled' ? p.status : 'planned';
+    if (id === 'approvalAmount') return moneyText(p.approvalAmount ?? p.amount);
+    if (id === 'approvalAmountWithoutVat') return moneyText(p.approvalAmountWithoutVat ?? amountWithoutVat(p.approvalAmount ?? p.amount, p.approvalVatRate ?? DEFAULT_VAT));
+    if (id === 'vatCell') {
+      const gross = Number(p.approvalAmount ?? p.amount) || 0;
+      const rate = p.approvalVatRate ?? DEFAULT_VAT;
+      const vat = p.approvalVatAmount ?? (gross - (Number(amountWithoutVat(gross, rate)) || 0));
+      return `${moneyText(vat)} ${rate}`;
+    }
+    if (id === 'amount') return moneyText(p.amount);
     return p[id] || '';
   }
   function analyticsField(c, id) {
-    if (id === 'any') return [c.number, c.counterparty, c.project, c.subject, c.comment, labels[c.direction], labels[c.kind]].filter(Boolean).join(' ');
+    const limit = Number(c.amount) || 0;
+    const fact = contractFact(c);
+    const income = isTop(c) && c.direction === 'income' && !c.otherExpense;
+    if (id === 'any') return [c.documentCard, c.number, c.counterparty, c.project, c.subject, c.comment, labels[c.direction], labels[c.kind]].filter(Boolean).join(' ');
+    if (id === 'title') return `${c.number || ''} ${c.subject || ''} ${showDate(c.date)}`;
+    if (id === 'amount') return moneyText(c.amount);
+    if (id === 'fact') return moneyText(fact);
+    if (id === 'payRemainder') return moneyText(limit - fact);
+    if (id === 'contracted') return income ? moneyText(contracted(c)) : '';
+    if (id === 'balance') return income ? moneyText(limit - contracted(c)) : '';
+    if (id === 'advancePercent') return moneyText(c.advancePercent);
+    if (id === 'factPercent') return moneyText(factPercent(fact, limit));
     return c[id] || '';
   }
   function rowMatches(entity, filters, getter) {
