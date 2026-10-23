@@ -106,13 +106,13 @@
     .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,60,.1); }
     .btn.primary { border-color: #4faba4; color: #103e3b; background: var(--blue); }
     .btn.small { padding: 5px 9px; font-size: 12px; }
-    .cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .cards { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
     .card {
       border: 1px solid var(--line); border-radius: var(--radius);
-      padding: 14px 16px; background: var(--surface); box-shadow: var(--shadow);
+      padding: 12px 10px; background: var(--surface); box-shadow: var(--shadow); min-width: 0;
     }
-    .metric-label { color: var(--muted); margin-bottom: 6px; font-size: 12px; }
-    .metric-value { font-size: 19px; font-weight: 750; letter-spacing: -.5px; white-space: nowrap; }
+    .metric-label { color: var(--muted); margin-bottom: 6px; font-size: 12px; line-height: 1.3; }
+    .metric-value { font-size: clamp(12px, 1.05vw, 16px); font-weight: 750; letter-spacing: -.4px; white-space: nowrap; }
     .metric-note { margin-top: 5px; font-size: 11px; color: var(--muted); }
     .metric-note.good { color: var(--green); }
     .metric-note.warn { color: var(--amber); }
@@ -325,7 +325,6 @@
       opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s ease;
     }
     .toast.show { opacity: 1; transform: translateY(0); }
-    @media (max-width: 1400px) { .cards { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 1100px) { .dict-grid { grid-template-columns: 1fr; } }
     @media (max-width: 760px) {
       .app { display: block; }
@@ -2130,13 +2129,18 @@
     const allFree = freePayments();
     const expenseLimit = sumAmount(expense) + sumAmount(allFree);
     const expenseFact = expense.reduce((s, c) => s + contractFact(c), 0) + sumPaid(allFree);
+    const receiptRemainder = incomeLimit - incomeFact;
+    const contractedWithinIncome = income.reduce((s, c) => s + contracted(c), 0);
+    const limitRemainder = incomeLimit - expenseLimit;
     const freeToContract = income.reduce((s, c) => s + Math.max(0, Number(c.amount || 0) - contracted(c)), 0);
     document.getElementById('analytics-cards').innerHTML =
-      metric('Доходы (лимит)', money(incomeLimit), 'доходные договоры, без прочих расходов') +
+      metric('Доходы лимит', money(incomeLimit), 'лимит доходных договоров') +
       metric('Доходы (факт)', money(incomeFact), 'исполненные поступления', 'good') +
-      metric('Расходы (законтрактовано)', money(expenseLimit), 'расходные договоры и счета без договора') +
+      metric('Остаток поступлений', money(receiptRemainder), 'лимит доходных − исполненные поступления', receiptRemainder < 0 ? 'warn' : 'good') +
+      metric('Расходы лимит', money(expenseLimit), 'лимит всех расходных договоров и платежей без договора') +
+      metric('Расходы (законтрактовано)', money(contractedWithinIncome), 'лимит расходов в рамках доходных') +
       metric('Расходы (факт)', money(expenseFact), 'исполненные списания') +
-      metric('Остаток (доход − расход)', money(incomeLimit - expenseLimit), 'по лимитам', incomeLimit - expenseLimit < 0 ? 'warn' : 'good') +
+      metric('Остаток (доход − расход)', money(limitRemainder), 'по лимитам', limitRemainder < 0 ? 'warn' : 'good') +
       metric('Можем законтрактовать', money(freeToContract), 'сумма свободных остатков доходных договоров', 'good');
 
     const matchedIds = new Set(state.contracts.filter(analyticsMatches).map(c => c.id));
